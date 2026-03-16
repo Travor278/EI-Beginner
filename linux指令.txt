@@ -1,0 +1,27 @@
+ls -lh 					列出当前目录下的文件，并以人类可读的格式（KB、MB、GB）显示文件大小，查看数据集大小必备。
+pwd						显示当前所在的绝对路径。
+rm -rf <文件夹名>			强制删除文件夹及内部所有内容（高危命令，敲回车前务必确认路径）。
+cp -r <源文件夹> <目标位置>	复制整个文件夹，常用于备份不同阶段的模型权重。
+
+htop						实时查看 CPU 和内存占用，界面比 top 更直观。
+watch -n 1 nvidia-smi		每隔 1 秒刷新一次 GPU 状态，用于实时盯盘显存和 GPU 利用率。
+ps aux | grep python			查找所有正在运行的 Python 进程，常用于找回后台运行的 nohup 任务的进程号（PID）。
+kill -9 <PID>				强制终止某个卡死或不需要的进程。
+kill <PID> 2>/dev/null
+
+tail -f train.log				实时滚动查看训练日志的最新输出，配合 nohup 使用体验极佳。
+grep "Error" train.log			在庞大的日志文件中迅速检索报错信息。
+
+wget -c <下载链接>			命令行下载文件，-c 支持断点续传，下载庞大模型权重时非常关键。
+
+nohup python -u train.py > logs/trainlog.log 2>&1 &
+
+echo "PID: $!"
+
+
+全局（镜像源+密钥）
+cat << 'EOF' >> ~/.bashrc
+export HF_ENDPOINT="https://hf-mirror.com"
+export HF_TOKEN="your_huggingface_token_here"
+EOF
+source ~/.bashrc && echo "OK"
