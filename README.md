@@ -4,17 +4,11 @@
 
 本仓库是我学习具身智能/人形机器人方向的个人笔记与练习记录，内容涵盖仿真环境搭建、强化学习、模仿学习等方向。
 
-## 仓库内容
-
-| 文件/文件夹 | 说明 |
-| --- | --- |
-| `EI_Mujoco/hello_mujoco.py` | MuJoCo 入门练习：创建简单场景、加载物理模型、运行仿真循环 |
-| `linux指令.txt` | Linux 常用指令备忘录，包含文件操作、进程管理、GPU 监控、训练日志等 |
-
 ## 入门基础
 
 - 会用 ChatGPT/DeepSeek 和 Google
 - 会用 Linux
+  - `linux指令.txt`：Linux 常用指令备忘录，包含文件操作、进程管理、GPU 监控、训练日志等
 - 会用 Git 和 GitHub
   - <https://learngitbranching.js.org/>
 
@@ -31,6 +25,13 @@
 - PyBullet：<https://github.com/bulletphysics/bullet3>
 - MuJoCo：<https://mujoco.org/>
 - 闯关游戏：<https://rcfs.ch/>
+
+### 对应当前仓库内容
+
+- `Robotics_NTU/`
+  - 台大《机器人学》课堂笔记整理及配套可视化
+- `EI_Mujoco/hello_mujoco.py`
+  - MuJoCo 入门练习：创建简单场景、加载物理模型、运行仿真循环
 
 ## 任务二：基于强化学习的机械臂物体抓取
 
