@@ -1,0 +1,229 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<title>正运动学 — 台大机器人学</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--border:#21262d;--text:#c9d1d9;--muted:#8b949e;--acc:#58a6ff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{height:100vh;display:flex;background:var(--bg);color:var(--text);
+  font:13px/1.5 'Segoe UI',system-ui,sans-serif;overflow:hidden}
+#panel{width:290px;min-width:290px;background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden}
+.ph{padding:14px 16px;border-bottom:1px solid var(--border)}
+.ph h1{font-size:15px;font-weight:600;color:var(--acc)}
+.ph p{font-size:11px;color:var(--muted);margin-top:2px}
+.tabs{display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--border)}
+.tab{flex:1;padding:6px 4px;border:1px solid var(--border);background:transparent;color:var(--muted);
+  border-radius:6px;cursor:pointer;font-size:11px;font-weight:500;transition:.15s}
+.tab:hover{border-color:var(--acc);color:var(--text)}
+.tab.on{background:var(--acc);border-color:var(--acc);color:#0d1117;font-weight:700}
+#sliders{flex:1;overflow-y:auto;padding:4px 0}
+.sr{padding:9px 16px}
+.sh{display:flex;justify-content:space-between;margin-bottom:4px}
+.jn{font-weight:500;font-size:13px}.jv{color:var(--acc);font-family:monospace;font-size:12px}
+input[type=range]{width:100%;height:3px;accent-color:var(--acc);cursor:pointer}
+.trow{display:flex;align-items:center;gap:8px;padding:8px 16px;border-top:1px solid var(--border)}
+.sw{width:32px;height:18px;background:var(--border);border-radius:9px;cursor:pointer;position:relative;flex-shrink:0}
+.sw.on{background:var(--acc)}
+.sw::after{content:'';position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:2px;left:2px;transition:left .15s}
+.sw.on::after{left:16px}
+#info{padding:12px 16px;background:rgba(0,0,0,.3);border-top:1px solid var(--border)}
+.it{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.ig{display:grid;grid-template-columns:auto 1fr;gap:3px 10px}
+.ik{color:var(--muted);font-size:12px}.iv{color:var(--acc);font-family:monospace;font-size:12px;text-align:right}
+#cv{flex:1;position:relative}canvas{display:block}
+</style></head><body>
+<div id="panel">
+  <div class="ph"><h1>正运动学可视化</h1><p>台大林沛群教授《机器人学》第三章</p></div>
+  <div class="tabs">
+    <button class="tab on" id="tb-rrr"  onclick="setR('rrr')">RRR</button>
+    <button class="tab"    id="tb-puma" onclick="setR('puma')">PUMA 560</button>
+    <button class="tab"    id="tb-rrrp" onclick="setR('rrrp')">RRRP</button>
+  </div>
+  <div id="sliders"></div>
+  <div class="trow"><div class="sw" id="sw-ax" onclick="togAx()"></div>
+    <span style="font-size:12px;color:var(--muted)">显示坐标轴</span></div>
+  <div id="info">
+    <div class="it">末端执行器</div>
+    <div class="ig">
+      <span class="ik">x</span><span class="iv" id="vx">—</span>
+      <span class="ik">y</span><span class="iv" id="vy">—</span>
+      <span class="ik">z</span><span class="iv" id="vz">—</span>
+      <span class="ik" id="lp">φ</span><span class="iv" id="vp">—</span>
+    </div>
+  </div>
+</div>
+<div id="cv"></div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as T from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+// ── Renderer ──
+const wrap=document.getElementById('cv');
+const ren=new T.WebGLRenderer({antialias:true});
+ren.setPixelRatio(devicePixelRatio);
+ren.shadowMap.enabled=true; ren.shadowMap.type=T.PCFSoftShadowMap;
+ren.toneMapping=T.ACESFilmicToneMapping; ren.toneMappingExposure=1.15;
+wrap.appendChild(ren.domElement);
+const scene=new T.Scene(); scene.background=new T.Color(0x0d1117);
+scene.fog=new T.FogExp2(0x0d1117,.12);
+const cam=new T.PerspectiveCamera(42,1,.01,50);
+cam.position.set(2.2,1.8,2.2);
+const ctrl=new OrbitControls(cam,ren.domElement);
+ctrl.enableDamping=true; ctrl.dampingFactor=.06;
+ctrl.target.set(0,.4,0); ctrl.minDistance=.4; ctrl.maxDistance=10;
+function resize(){const w=wrap.clientWidth,h=wrap.clientHeight;
+  ren.setSize(w,h); cam.aspect=w/h; cam.updateProjectionMatrix();}
+window.addEventListener('resize',resize); resize();
+
+// ── Lights ──
+scene.add(new T.AmbientLight(0x8090b0,.9));
+const sun=new T.DirectionalLight(0xffffff,3.5);
+sun.position.set(3,4,3); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-2,right:2,top:2,bottom:-2,near:.1,far:20});
+scene.add(sun);
+const fill=new T.DirectionalLight(0x8090ff,.6); fill.position.set(-2,2,-1); scene.add(fill);
+
+// ── Floor ──
+const fm=new T.MeshStandardMaterial({color:0x1a1f2e,roughness:.9});
+const fl=new T.Mesh(new T.PlaneGeometry(8,8),fm);
+fl.rotation.x=-Math.PI/2; fl.receiveShadow=true; scene.add(fl);
+scene.add(new T.GridHelper(4,20,0x2a2d40,0x1e2130));
+
+// ── Materials ──
+const MAT={
+  base:new T.MeshStandardMaterial({color:0x2c3e50,roughness:.4,metalness:.75}),
+  joint:new T.MeshStandardMaterial({color:0xe8eaf6,roughness:.15,metalness:.9}),
+  ee:new T.MeshStandardMaterial({color:0xff3030,roughness:.1,metalness:.9,emissive:0x440000}),
+  lk:[0x1976d2,0x388e3c,0xf57c00,0x7b1fa2,0x00838f,0xc62828].map(
+    c=>new T.MeshStandardMaterial({color:c,roughness:.3,metalness:.6}))
+};
+
+// ── FK Math (Modified DH, row-major set) ──
+function mdh(a,aDeg,d,tDeg){
+  const al=aDeg*Math.PI/180, th=tDeg*Math.PI/180;
+  const [ca,sa,ct,st]=[Math.cos(al),Math.sin(al),Math.cos(th),Math.sin(th)];
+  const M=new T.Matrix4();
+  M.set(ct,-st,0,a, st*ca,ct*ca,-sa,-d*sa, st*sa,ct*sa,ca,d*ca, 0,0,0,1);
+  return M;}
+function chainFK(rows){let T0=new T.Matrix4(); const fs=[T0.clone()];
+  for(const r of rows){T0=T0.clone().multiply(mdh(...r)); fs.push(T0.clone());}
+  return fs;}
+function pos3(M){const e=M.elements; return new T.Vector3(e[12],e[13],e[14]);}
+// Z-up → Y-up:  (xr,yr,zr) → (xr, zr, -yr)
+function r2t(v,bh=0){return new T.Vector3(v.x,v.z+bh,-v.y);}
+
+// ── Robot Configs ──
+const ROBOTS={
+  rrr:{joints:[{l:'θ₁',mn:-180,mx:180,v:30},{l:'θ₂',mn:-180,mx:180,v:60},{l:'θ₃',mn:-180,mx:180,v:-45}],
+    dh:a=>[[0,0,0,a[0]],[.5,0,0,a[1]],[.4,0,0,a[2]],[.3,0,0,0]],
+    radii:[.055,.045,.035,0], bh:.12, phi:true},
+  puma:{joints:[{l:'θ₁',mn:-180,mx:180,v:0},{l:'θ₂',mn:-135,mx:135,v:90},
+    {l:'θ₃',mn:-135,mx:135,v:-90},{l:'θ₄',mn:-180,mx:180,v:0},
+    {l:'θ₅',mn:-135,mx:135,v:90},{l:'θ₆',mn:-180,mx:180,v:0}],
+    dh:a=>[[0,0,0,a[0]],[0,-90,0,a[1]],[.4318,0,0,a[2]],
+           [-.0203,-90,.4331,a[3]],[0,90,0,a[4]],[0,-90,0,a[5]]],
+    radii:[.055,.048,.042,.035,.030,.024], bh:.15, phi:false},
+  rrrp:{joints:[{l:'θ₁',mn:-180,mx:180,v:40},{l:'θ₂',mn:-180,mx:180,v:60},
+    {l:'θ₃',mn:-180,mx:180,v:-30},{l:'d₄',mn:0,mx:.6,v:.2,step:.01,unit:'m'}],
+    dh:a=>[[0,0,0,a[0]],[.45,0,0,a[1]],[.35,0,0,a[2]],[.25,0,a[3],0]],
+    radii:[.055,.045,.038,.028], bh:.12, phi:true}
+};
+
+// ── Scene Graph ──
+const root=new T.Group(); scene.add(root);
+let objs={joints:[],links:[],axH:[],ee:null};
+const Y1=new T.Vector3(0,1,0);
+
+function mkCap(r,l){return new T.CapsuleGeometry(r,Math.max(.001,l),10,20);}
+function rebuild(cfg){
+  while(root.children.length)root.remove(root.children[0]);
+  objs={joints:[],links:[],axH:[],ee:null};
+  const n=cfg.joints.length, bh=cfg.bh, rads=cfg.radii;
+  // Base
+  const bc=new T.Mesh(new T.CylinderGeometry(.10,.12,bh,32),MAT.base);
+  bc.position.y=bh/2; bc.castShadow=bc.receiveShadow=true; root.add(bc);
+  const br=new T.Mesh(new T.CylinderGeometry(.09,.09,.015,32),MAT.joint);
+  br.position.y=bh+.007; root.add(br);
+  for(let i=0;i<n;i++){
+    const r=rads[i]||.025;
+    const jm=new T.Mesh(new T.SphereGeometry(r*1.5,32,32),MAT.joint.clone());
+    jm.castShadow=true; root.add(jm); objs.joints.push(jm);
+    const lm=new T.Mesh(mkCap(r,.1),MAT.lk[i%6].clone());
+    lm.castShadow=true; root.add(lm); objs.links.push(lm);
+    const ah=new T.AxesHelper(.16); ah.visible=false; root.add(ah); objs.axH.push(ah);
+  }
+  const em=new T.Mesh(new T.SphereGeometry(.042,32,32),MAT.ee.clone());
+  em.castShadow=true; root.add(em); objs.ee=em;
+}
+
+function setLink(mesh,p1,p2,r){
+  const dir=new T.Vector3().subVectors(p2,p1), L=dir.length();
+  if(L<.001)return;
+  mesh.position.copy(p1.clone().add(p2).multiplyScalar(.5));
+  mesh.quaternion.setFromUnitVectors(Y1,dir.normalize());
+  mesh.geometry.dispose(); mesh.geometry=mkCap(r,L-r*1.5);
+}
+
+let curRobot='rrr', showAx=false;
+
+function updatePose(angles){
+  const cfg=ROBOTS[curRobot];
+  const frames=chainFK(cfg.dh(angles));
+  const bh=cfg.bh, bv=new T.Vector3(0,bh,0);
+  for(let i=0;i<objs.joints.length;i++){
+    const p=r2t(pos3(frames[i]),bh);
+    objs.joints[i].position.copy(p);
+    objs.axH[i].position.copy(p); objs.axH[i].visible=showAx;
+    const pn=r2t(pos3(frames[i+1]),bh);
+    setLink(objs.links[i],p,pn,cfg.radii[i]||.025);
+  }
+  const ee=r2t(pos3(frames[frames.length-1]),bh);
+  objs.ee.position.copy(ee);
+  const er=pos3(frames[frames.length-1]);
+  document.getElementById('vx').textContent=er.x.toFixed(4);
+  document.getElementById('vy').textContent=er.y.toFixed(4);
+  document.getElementById('vz').textContent=er.z.toFixed(4);
+  if(cfg.phi&&angles.length>=3){
+    document.getElementById('lp').textContent='φ=θ₁+θ₂+θ₃';
+    document.getElementById('vp').textContent=(angles[0]+angles[1]+angles[2]).toFixed(1)+'°';
+  }else{document.getElementById('vp').textContent='—';}
+}
+
+function buildSliders(cfg){
+  const c=document.getElementById('sliders'); c.innerHTML='';
+  cfg.joints.forEach((j,i)=>{
+    const step=j.step||1, unit=j.unit||'°';
+    const d=document.createElement('div'); d.className='sr';
+    d.innerHTML=`<div class="sh"><span class="jn">${j.l}</span>
+      <span class="jv" id="jv${i}">${j.v.toFixed(j.unit?2:0)}${unit}</span></div>
+      <input type="range" id="js${i}" min="${j.mn}" max="${j.mx}" step="${step}" value="${j.v}">`;
+    d.querySelector('input').addEventListener('input',()=>{
+      const a=ROBOTS[curRobot].joints.map((_,k)=>{
+        const el=document.getElementById('js'+k); return el?parseFloat(el.value):0;});
+      ROBOTS[curRobot].joints.forEach((_,k)=>{
+        const u=ROBOTS[curRobot].joints[k].unit||'°';
+        const el=document.getElementById('jv'+k); if(el)el.textContent=a[k].toFixed(u==='m'?2:0)+u;});
+      updatePose(a);});
+    c.appendChild(d);});
+}
+
+window.setR=function(name){
+  curRobot=name;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.getElementById('tb-'+name).classList.add('on');
+  const cfg=ROBOTS[name]; buildSliders(cfg); rebuild(cfg);
+  updatePose(cfg.joints.map(j=>j.v));};
+
+window.togAx=function(){
+  showAx=!showAx;
+  document.getElementById('sw-ax').classList.toggle('on',showAx);
+  objs.axH.forEach(a=>{a.visible=showAx;});};
+
+setR('rrr');
+(function anim(){requestAnimationFrame(anim); ctrl.update(); ren.render(scene,cam);})();
+</script></body></html>
