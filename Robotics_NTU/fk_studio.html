@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FK Studio</title>
+<style>
+:root{--bg:#06111a;--bg2:#0b1621;--panel:rgba(8,18,28,.84);--line:rgba(124,228,255,.16);--text:#ecf8ff;--muted:#8eacbe;--acc:#7ce4ff}
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{overflow:hidden;color:var(--text);font-family:"Bahnschrift","Segoe UI Variable","Segoe UI",sans-serif;background:radial-gradient(circle at 16% 14%,rgba(124,228,255,.12),transparent 24%),radial-gradient(circle at 85% 10%,rgba(255,188,111,.08),transparent 18%),linear-gradient(160deg,#03080d 0%,var(--bg) 36%,var(--bg2) 100%)}
+.app{display:grid;grid-template-columns:360px 1fr;height:100%}.panel{display:flex;flex-direction:column;gap:14px;padding:16px;min-height:0;background:linear-gradient(180deg,rgba(8,18,28,.95),rgba(7,16,25,.74));border-right:1px solid var(--line);backdrop-filter:blur(20px);z-index:2}.scroll{flex:1;min-height:0;overflow:auto;padding-right:6px;padding-bottom:28px}.scroll::-webkit-scrollbar{width:10px}.scroll::-webkit-scrollbar-thumb{background:rgba(124,228,255,.14);border-radius:999px}
+.hero,.sec,.hud,.credit{border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(18px)}.hero{padding:16px;border-radius:22px;background:radial-gradient(circle at top right,rgba(124,228,255,.16),transparent 26%),linear-gradient(180deg,rgba(14,30,45,.92),rgba(9,19,30,.88))}.eyebrow{display:inline-flex;padding:6px 10px;border-radius:999px;border:1px solid rgba(124,228,255,.18);background:rgba(124,228,255,.08);color:var(--acc);font-size:11px;letter-spacing:.12em;text-transform:uppercase}.hero h1{margin:12px 0 8px;font-size:30px;letter-spacing:-.04em}.hero p{margin:0;color:#b3c9d8;font-size:13px;line-height:1.6}
+.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}.meta div{padding:10px 12px;border-radius:16px;background:rgba(124,228,255,.06);border:1px solid rgba(124,228,255,.12)}.meta b{display:block;font-size:14px}.meta span{font-size:10px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.sec{padding:14px;border-radius:20px}.sec h2{margin:0 0 12px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.grid2,.grid4,.stats{display:grid;gap:10px}.grid2{grid-template-columns:repeat(2,1fr)}.grid4{grid-template-columns:repeat(4,1fr)}.stats{grid-template-columns:repeat(2,1fr)}
+button,input{font:inherit}.card,.btn,.cam,.act{border:1px solid rgba(124,228,255,.16);background:rgba(124,228,255,.04);color:var(--text);border-radius:16px;transition:.18s;cursor:pointer}.card:hover,.btn:hover,.cam:hover,.act:hover{transform:translateY(-1px);border-color:rgba(124,228,255,.42)}.card.active,.btn.active,.cam.active{background:linear-gradient(180deg,rgba(124,228,255,.22),rgba(124,228,255,.10));border-color:rgba(124,228,255,.6);box-shadow:0 0 0 1px rgba(124,228,255,.2) inset,0 8px 24px rgba(124,228,255,.12)}
+.card{padding:12px;text-align:left;min-height:88px}.card strong{display:block;font-size:14px;margin-bottom:4px}.card span,.btn small{display:block;color:var(--muted);font-size:11px;line-height:1.45}.btn,.cam,.act{padding:11px 12px;font-size:12px;font-weight:600}.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.sliders{display:grid;gap:12px}.row{padding:12px;border-radius:18px;background:rgba(124,228,255,.04);border:1px solid rgba(124,228,255,.10)}.head{display:flex;justify-content:space-between;gap:10px;margin-bottom:8px}.name{font-size:14px;font-weight:600}.val{color:var(--acc);font:12px Consolas,monospace}input[type=range]{width:100%;height:28px;margin:0;accent-color:var(--acc);background:transparent}
+.stat{padding:12px;border-radius:16px;background:rgba(124,228,255,.05);border:1px solid rgba(124,228,255,.10)}.stat span{display:block}.lab{color:var(--muted);font-size:10px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}.num{font:15px Consolas,monospace}
+.note{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.55}.stage{position:relative;min-width:0}#vp{position:absolute;inset:0}.hud{position:absolute;left:18px;right:18px;top:18px;display:flex;justify-content:space-between;gap:14px;padding:12px 14px;border-radius:18px;pointer-events:none}.hud strong{display:block;font-size:13px}.hud span{display:block;color:var(--muted);font-size:11px;margin-top:2px}.pills{display:flex;gap:8px;flex-wrap:wrap}.pill{padding:8px 10px;border-radius:999px;border:1px solid rgba(124,228,255,.14);background:rgba(124,228,255,.08);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.credit{position:absolute;right:18px;bottom:18px;padding:10px 12px;border-radius:16px;color:var(--muted);font-size:11px;line-height:1.55}.credit b{color:#fff}
+@media (max-width:1180px){.app{grid-template-columns:1fr}.panel{position:absolute;left:16px;top:16px;bottom:16px;width:min(360px,calc(100vw - 32px));border:1px solid var(--line);border-radius:26px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <section class="hero">
+      <div class="eyebrow">Chapter 03 FK Studio</div>
+      <h1>GPU 3D Viewer</h1>
+      <p id="blurb">在保留现有 FK 数学定义的前提下，把 Chapter03 的 standalone viewer 升级成更适合讲解、演示和连续观察的实时场景。</p>
+      <div class="meta"><div><span>Renderer</span><b>WebGL</b></div><div><span>Look</span><b>PBR + Bloom</b></div><div><span>Focus</span><b>FK / Workspace</b></div></div>
+    </section>
+    <div class="scroll">
+      <section class="sec"><h2>Robot</h2><div class="grid2" id="robots"></div></section>
+      <section class="sec"><h2>Presets</h2><div class="grid2" id="presets"></div></section>
+      <section class="sec"><h2>Joint Controls</h2><div class="sliders" id="sliders"></div></section>
+      <section class="sec"><h2>Display</h2><div class="grid2"><button class="btn active" id="tg-frames">Frames<small>关节与末端局部坐标系</small></button><button class="btn active" id="tg-trail">Trail<small>末端实时轨迹</small></button><button class="btn" id="tg-work">Workspace<small>采样点云可达域</small></button><button class="btn" id="tg-auto">Autoplay<small>连续扫过关节空间</small></button></div></section>
+      <section class="sec"><h2>Camera</h2><div class="grid4"><button class="cam active" data-v="iso">ISO</button><button class="cam" data-v="front">Front</button><button class="cam" data-v="side">Side</button><button class="cam" data-v="top">Top</button></div><div class="actions" style="margin-top:10px"><button class="act" id="go-home">Home Pose</button><button class="act" id="go-fit">Fit View</button><button class="act" id="go-clear">Clear Trail</button></div></section>
+      <section class="sec"><h2>End Effector</h2><div class="stats"><div class="stat"><span class="lab">x</span><span class="num" id="xv">0.0000</span></div><div class="stat"><span class="lab">y</span><span class="num" id="yv">0.0000</span></div><div class="stat"><span class="lab">z</span><span class="num" id="zv">0.0000</span></div><div class="stat"><span class="lab" id="olab">phi</span><span class="num" id="ov">0.0 deg</span></div><div class="stat"><span class="lab">reach</span><span class="num" id="rv">0.0000</span></div><div class="stat"><span class="lab">robot</span><span class="num" id="pv">RRR</span></div></div><div class="note" id="note">拖动关节、切预设或开启 Autoplay，可以连续观察 joint space 如何映射到末端位姿与轨迹。</div></section>
+    </div>
+  </aside>
+  <main class="stage">
+    <div id="vp"></div>
+    <div class="hud"><div><strong id="ht">RRR Planar Chain</strong><span id="hs">PBR 材质、局部坐标系、轨迹残影与工作空间点云联动。</span></div><div class="pills"><div class="pill">High Performance</div><div class="pill">Physically Based</div><div class="pill">FK Native</div></div></div>
+    <div class="credit"><b>Tip</b><br>左键旋转，右键平移，滚轮缩放。<br>Workspace 首次打开时会采样并缓存点云。</div>
+  </main>
+</div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module" src="./fk_studio.js"></script>
+</body>
+</html>
