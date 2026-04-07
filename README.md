@@ -37,14 +37,31 @@
 
 ![任务二](./assets/task2.png)
 
-1. 学习强化学习基础，在 OpenAI Gym 环境中选择感兴趣的任务训练并测试；
+1. 学习强化学习基础，在 Gymnasium（OpenAI Gym 的后续维护版本）环境中按推荐顺序训练并测试；
 2. 在 PyBullet/Mujoco 中训练机械臂抓取策略，体会 Sim2Real 过程。
 
 参考资料：
 
 - Introduction to Reinforcement Learning, 2nd & David Silver's UCL Course
 - UCB CS285 Deep Reinforcement Learning
-- OpenAI Gym：<https://gymnasium.farama.org/index.html>
+- Gymnasium：<https://gymnasium.farama.org/index.html>
+
+### 对应当前仓库内容
+
+- `RL_Basics/`
+  - 强化学习基础学习路线与笔记入口：先理解 MDP、Bellman、MC/TD、Q-learning、Policy Gradient、Actor-Critic
+- `Gymnasium_Basics/`
+  - Gymnasium 入门任务路线，按推荐顺序推进：`FrozenLake-v1 -> CartPole-v1 -> Pendulum-v1 -> LunarLander-v3`
+- `Gymnasium_Robotics/`
+  - 机器人强化学习任务路线：`FetchReach-v3 -> FetchPush-v3 -> FetchPickAndPlace-v3`
+- `Robot_Grasping_RL/`
+  - 自定义机械臂抓取任务规划：观测设计、动作空间、奖励函数、训练阶段拆分、Sim2Real 检查项
+- `EI_Mujoco/hello_mujoco.py`
+  - MuJoCo 仿真起点，后续可扩展为自定义机械臂抓取环境
+
+推荐完成顺序：
+
+- `RL_Basics -> Gymnasium_Basics -> Gymnasium_Robotics -> Robot_Grasping_RL`
 
 ## 任务三：基于模仿学习的机械臂物体抓取
 

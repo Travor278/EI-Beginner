@@ -36,14 +36,37 @@ References:
 
 ![Task 2](./assets/task2.png)
 
-1. Learn RL fundamentals and train agents on several tasks in OpenAI Gym;
+1. Learn RL fundamentals and train agents in Gymnasium (the maintained successor to OpenAI Gym) following a recommended task order;
 2. Train a grasping policy in PyBullet/MuJoCo and experience the Sim2Real transfer process.
 
 References:
 
 - Introduction to Reinforcement Learning, 2nd Ed. & David Silver's UCL Course
 - UCB CS285 Deep Reinforcement Learning
-- OpenAI Gym: <https://gymnasium.farama.org/index.html>
+- Gymnasium: <https://gymnasium.farama.org/index.html>
+
+Suggested pacing:
+
+- Do not wait until all RL theory is finished before training tasks;
+- A better rhythm is "learn one block of theory -> solve one environment -> summarize -> move to the next environment";
+- The task sequence below is already chosen so the path goes from tabular RL to robotic manipulation.
+
+### Current Repository Contents
+
+- `RL_Basics/`
+  - Entry point for RL fundamentals: MDPs, Bellman equations, MC/TD, Q-learning, Policy Gradient, Actor-Critic
+- `Gymnasium_Basics/`
+  - Intro Gymnasium task path in recommended order: `FrozenLake-v1 -> CartPole-v1 -> Pendulum-v1 -> LunarLander-v3`
+- `Gymnasium_Robotics/`
+  - Robotics RL task path: `FetchReach-v3 -> FetchPush-v3 -> FetchPickAndPlace-v3`
+- `Robot_Grasping_RL/`
+  - Planning notes for custom robotic grasping: observations, action space, reward design, training stages, Sim2Real checklist
+- `EI_Mujoco/hello_mujoco.py`
+  - MuJoCo simulation starting point that can later grow into a custom grasping environment
+
+Recommended completion order:
+
+- `RL_Basics -> Gymnasium_Basics -> Gymnasium_Robotics -> Robot_Grasping_RL`
 
 ## Task 3: Imitation Learning-based Robotic Arm Grasping
 
