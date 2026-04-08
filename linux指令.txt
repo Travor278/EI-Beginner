@@ -1,27 +1,128 @@
-ls -lh 					    列出当前目录下的文件，并以人类可读的格式（KB、MB、GB）显示文件大小，查看数据集大小必备。
-pwd						    显示当前所在的绝对路径。
-rm -rf <文件夹名>			 强制删除文件夹及内部所有内容（高危命令，敲回车前务必确认路径）。
-cp -r <源文件夹> <目标位置>	  复制整个文件夹，常用于备份不同阶段的模型权重。
+【基础导航】
+pwd                                显示当前所在的绝对路径。
+ls -lh                             列出当前目录下的文件，并以人类可读格式（KB、MB、GB）显示大小。
+ls -la                             列出当前目录下的所有文件，包括隐藏文件。
+cd <目录名>                         进入指定目录。
+cd ..                              返回上一级目录。
+cd ~                               回到当前用户的家目录。
+tree -L 2                          以 2 层深度查看目录结构；没有该命令时可先安装 `tree`。
 
-htop						实时查看 CPU 和内存占用，界面比 top 更直观。
-watch -n 1 nvidia-smi		每隔 1 秒刷新一次 GPU 状态，用于实时盯盘显存和 GPU 利用率。
-ps aux | grep python		查找所有正在运行的 Python 进程，常用于找回后台运行的 nohup 任务的进程号（PID）。
-kill -9 <PID>				强制终止某个卡死或不需要的进程。
-kill <PID> 2>/dev/null
+【文件与目录操作】
+mkdir <文件夹名>                    新建文件夹。
+mkdir -p <多级路径>                 递归创建多级目录，不存在的父目录会一起创建。
+cp <源文件> <目标文件>               复制单个文件。
+cp -r <源文件夹> <目标位置>          复制整个文件夹，常用于备份不同阶段的模型权重。
+mv <旧名字> <新名字>                 重命名文件或文件夹。
+mv <文件> <目标目录>                 移动文件到指定目录。
+rm <文件名>                         删除单个文件。
+rm -rf <文件夹名>                   强制删除文件夹及内部所有内容（高危命令，敲回车前务必确认路径）。
+find . -name "*.py"                在当前目录递归查找所有 `.py` 文件。
+find . -type d -name "logs"        递归查找名为 `logs` 的文件夹。
+du -sh <文件或文件夹>                查看某个文件或目录总大小。
+du -sh *                           查看当前目录下每个文件/文件夹各占多大空间。
+df -h                              查看磁盘整体使用情况，排查磁盘是否快满了。
 
-tail -f train.log			实时滚动查看训练日志的最新输出，配合 nohup 使用体验极佳。
-grep "Error" train.log		在庞大的日志文件中迅速检索报错信息。
+【文件查看与文本检索】
+cat <文件名>                        直接输出整个文件内容，适合短文件。
+less <文件名>                       分页查看长文件，按 `q` 退出。
+head -n 20 <文件名>                 查看文件前 20 行。
+tail -n 50 <文件名>                 查看文件最后 50 行。
+tail -f train.log                  实时滚动查看日志最新输出，配合训练任务非常常用。
+grep "Error" train.log             在日志中快速检索包含 `Error` 的行。
+grep -n "loss" train.log           搜索关键字并显示行号。
+grep -R "class Robot" .            递归搜索当前目录下所有文件中的指定文本。
+wc -l <文件名>                      统计文件总行数。
+sed -n '1,30p' <文件名>             只打印第 1 到 30 行，查看配置文件很方便。
 
-wget -c <下载链接>			 命令行下载文件，-c 支持断点续传，下载庞大模型权重时非常关键。
+【进程、系统资源与 GPU】
+top                                 查看系统进程和资源占用，Linux 自带。
+htop                                实时查看 CPU 和内存占用，界面比 `top` 更直观。
+free -h                             查看内存使用情况。
+ps aux | grep python                查找所有正在运行的 Python 进程，常用于找回训练任务 PID。
+jobs -l                             查看当前 shell 启动的后台任务。
+kill <PID>                          先尝试优雅终止某个进程。
+kill -9 <PID>                       强制终止卡死或不再需要的进程。
+kill <PID> 2>/dev/null || true      尝试结束进程且忽略“进程不存在”报错。
+nvidia-smi                          查看 GPU 显存、利用率和当前占用进程。
+watch -n 1 nvidia-smi               每隔 1 秒刷新一次 GPU 状态，实时盯盘很常用。
 
-nohup python -u train.py > logs/trainlog.log 2>&1 &
+【网络下载与远程传输】
+wget -c <下载链接>                   命令行下载文件，`-c` 支持断点续传，下载大模型时很关键。
+curl -L -O <下载链接>                跟随重定向并把文件按原文件名下载到当前目录。
+scp <本地文件> user@host:/path/      把本地文件传到远程机器。
+scp user@host:/path/file .          把远程文件拷回当前目录。
+rsync -avh <源路径> <目标路径>        高效同步文件，断点续传和增量复制体验通常比 `cp` 更好。
+ssh user@host                       通过 SSH 登录远程 Linux 机器。
 
-echo "PID: $!"
+【压缩与解压】
+tar -czvf data.tar.gz <文件夹名>     把文件夹打包并压缩成 `.tar.gz`。
+tar -xzvf data.tar.gz               解压 `.tar.gz` 文件到当前目录。
+zip -r code.zip <文件夹名>           递归压缩文件夹为 `.zip`。
+unzip code.zip -d <目标目录>         把 `.zip` 解压到指定目录。
 
+【权限、环境变量与配置】
+chmod +x run.sh                     给脚本添加可执行权限。
+chmod -R 755 <文件夹名>              递归修改目录权限；操作前最好先确认用途。
+echo $PATH                          查看当前 PATH 环境变量。
+export VAR_NAME=value               临时设置环境变量，只在当前终端有效。
+source ~/.bashrc                    重新加载 `.bashrc`，让新环境变量立即生效。
 
-全局（镜像源+密钥）
+全局（镜像源 + 密钥）
 cat << 'EOF' >> ~/.bashrc
 export HF_ENDPOINT="https://hf-mirror.com"
 export HF_TOKEN="your_huggingface_token_here"
 EOF
 source ~/.bashrc && echo "OK"
+
+【后台运行任务】
+nohup python -u train.py > logs/trainlog.log 2>&1 &
+                                   让训练任务在后台持续运行，退出终端也不会中断。
+echo "PID: $!"                     打印刚刚启动的后台进程 PID。
+tail -f logs/trainlog.log          持续追踪训练日志输出。
+disown                             把当前 shell 的后台任务彻底移交出去，关闭终端更安心。
+
+【tmux 常用指令】
+tmux                               直接启动一个新的 tmux 会话。
+tmux new -s train                  新建一个名为 `train` 的会话。
+tmux ls                            查看当前所有 tmux 会话。
+tmux attach -t train               重新连接到名为 `train` 的会话。
+tmux detach                        从当前会话脱离（更常用快捷键 `Ctrl+b` 再按 `d`）。
+tmux rename-session -t old new     把会话 `old` 重命名为 `new`。
+tmux kill-session -t train         关闭名为 `train` 的会话。
+tmux kill-server                   关闭所有 tmux 会话（高危，确认没有重要任务再用）。
+
+【tmux 窗口与面板】
+tmux new-window -n editor          在当前会话中新建一个名为 `editor` 的窗口。
+tmux split-window -h               左右分屏。
+tmux split-window -v               上下分屏。
+tmux select-pane -L                切换到左边面板。
+tmux select-pane -R                切换到右边面板。
+tmux select-pane -U                切换到上方面板。
+tmux select-pane -D                切换到下方面板。
+
+【tmux 高频快捷键】
+Ctrl+b d                           脱离当前会话，任务继续在后台跑。
+Ctrl+b c                           新建窗口。
+Ctrl+b n                           切到下一个窗口。
+Ctrl+b p                           切到上一个窗口。
+Ctrl+b ,                           重命名当前窗口。
+Ctrl+b %                           左右分屏。
+Ctrl+b "                           上下分屏。
+Ctrl+b o                           在多个面板之间轮流切换。
+Ctrl+b 方向键                       在不同面板之间切换。
+Ctrl+b z                           当前面板临时全屏，再按一次恢复。
+Ctrl+b x                           关闭当前面板。
+Ctrl+b [                           进入复制/滚动模式，可上下翻历史输出，按 `q` 退出。
+
+【tmux 推荐配置】
+cat << 'EOF' > ~/.tmux.conf
+set -g mouse on
+set -g history-limit 100000
+EOF
+tmux source-file ~/.tmux.conf
+                                   开启鼠标滚动与更长历史记录，查看训练日志会舒服很多。
+
+【实战建议】
+长时间训练任务优先用 `tmux`，交互体验通常比单纯 `nohup` 更好。
+如果只是想“挂后台就不管了”，用 `nohup` 足够。
+如果既想后台运行，又想随时回来继续看输出、分屏、开多个窗口，优先用 `tmux`。
