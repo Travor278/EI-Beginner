@@ -1,0 +1,115 @@
+【启动 WSL 与进入 Ubuntu】
+wsl                                在 PowerShell 里直接进入默认的 Ubuntu 环境。
+wsl -d Ubuntu2204                  明确进入名为 `Ubuntu2204` 的发行版。
+wsl -d Ubuntu2204 --cd /home/Travor
+                                   进入 Ubuntu 后直接切到 `Travor` 家目录。
+wsl -d Ubuntu2204 -u root          以 `root` 用户进入，适合少量系统配置场景。
+wsl --list --verbose               查看当前已安装的 WSL 发行版和版本号。
+wsl --shutdown                     彻底关闭所有 WSL 实例，环境异常时可先重启这一层。
+exit                               从 Ubuntu 终端退出回 PowerShell。
+
+【ROS2 环境确认】
+echo $ROS_DISTRO                   查看当前加载的 ROS2 发行版；我们这里应为 `humble`。
+echo $ROS_VERSION                  确认当前是 ROS 1 还是 ROS 2；输出应为 `2`。
+which ros2                         查看 `ros2` 命令实际来自哪里。
+ros2 doctor --report               快速体检当前 ROS2 环境，排查缺包和配置问题很有用。
+printenv | grep -E "ROS|AMENT"     查看当前终端里和 ROS2 相关的环境变量。
+source /opt/ros/humble/setup.bash  手动加载系统级 ROS2 环境。
+source ~/ros2_ws/install/setup.bash
+                                   手动加载你自己工作区编译出来的环境。
+env | grep -i proxy                排查代理变量是否还残留，网络问题时经常有帮助。
+
+【工作区与构建】
+mkdir -p ~/ros2_ws/src             创建标准 ROS2 工作区目录。
+cd ~/ros2_ws                       进入工作区根目录。
+colcon build                       编译当前工作区中的所有包。
+colcon build --symlink-install     开发阶段更常用，改 Python 或资源文件时更省事。
+source install/setup.bash          编译后把当前工作区环境加载到本终端。
+colcon test                        运行工作区测试。
+colcon test-result --verbose       查看测试结果详情。
+rm -rf build/ install/ log/        清理工作区编译产物；重编译前常用，但删之前确认路径。
+
+【包、节点与启动】
+ros2 pkg list                      列出当前环境里所有可见的 ROS2 包。
+ros2 pkg executables turtlesim     查看某个包里有哪些可执行程序。
+ros2 run turtlesim turtlesim_node  启动 `turtlesim` 主程序。
+ros2 run turtlesim turtle_teleop_key
+                                   用键盘控制小乌龟，适合入门练手。
+ros2 run demo_nodes_cpp talker     启动一个经典发布者示例节点。
+ros2 run demo_nodes_py listener    启动一个经典订阅者示例节点。
+ros2 node list                     查看当前正在运行的节点。
+ros2 node info /turtlesim          查看某个节点订阅、发布和服务信息。
+ros2 launch <包名> <启动文件>       运行 launch 文件，项目里经常比 `ros2 run` 更常用。
+
+【Topic 常用指令】
+ros2 topic list                    查看当前所有 topic。
+ros2 topic echo /turtle1/pose      实时查看某个 topic 的消息内容。
+ros2 topic info /turtle1/cmd_vel   查看 topic 类型以及发布者/订阅者数量。
+ros2 topic hz /turtle1/pose        统计某个 topic 的发布频率。
+ros2 topic pub /turtle1/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 2.0}, angular: {z: 1.0}}"
+                                   手动向 topic 发布一条速度指令，调试时特别好用。
+ros2 topic pub -r 5 /turtle1/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 1.0}, angular: {z: 0.5}}"
+                                   以 5Hz 持续发布消息，测试控制链路时更直观。
+
+【Service 常用指令】
+ros2 service list                  查看当前所有 service。
+ros2 service type /clear           查看某个 service 的消息类型。
+ros2 service call /clear std_srvs/srv/Empty "{}"
+                                   调用清屏服务，把 `turtlesim` 背景轨迹清掉。
+ros2 service call /reset std_srvs/srv/Empty "{}"
+                                   把小乌龟位置和朝向恢复到初始状态。
+ros2 service call /spawn turtlesim/srv/Spawn "{x: 2.0, y: 2.0, theta: 0.0, name: 'turtle2'}"
+                                   生成第二只小乌龟，后面做多龟练习会用到。
+
+【Param 与 Action】
+ros2 param list                    查看节点暴露出来的参数。
+ros2 param get /turtlesim background_r
+                                   读取 `turtlesim` 背景颜色参数。
+ros2 param set /turtlesim background_r 255
+                                   修改背景红色通道；改完常配合 `/clear` 生效。
+ros2 action list                   查看当前所有 action。
+ros2 action info /turtle1/rotate_absolute
+                                   查看某个 action 的类型和服务端/客户端数量。
+ros2 action send_goal /turtle1/rotate_absolute turtlesim/action/RotateAbsolute "{theta: 1.57}"
+                                   发送一个绝对转向目标，让小乌龟转到指定角度。
+
+【接口查询】
+ros2 interface list                查看当前环境中所有消息、服务、动作接口。
+ros2 interface show geometry_msgs/msg/Twist
+                                   查看消息结构，手写 `topic pub` 时非常常用。
+ros2 interface show turtlesim/msg/Pose
+                                   查看 `turtlesim` 位姿消息有哪些字段。
+ros2 interface show turtlesim/srv/Spawn
+                                   查看生成新乌龟时需要传哪些参数。
+
+【Turtlesim 小练习】
+终端 1：wsl                        先进入 Ubuntu。
+终端 1：ros2 run turtlesim turtlesim_node
+                                   启动小乌龟窗口。
+终端 2：wsl                        再开一个 PowerShell 窗口并进入 Ubuntu。
+终端 2：ros2 run turtlesim turtle_teleop_key
+                                   用方向键控制小乌龟移动。
+终端 3：wsl                        想边看数据边操作时，可以再开第三个终端。
+终端 3：ros2 topic echo /turtle1/pose
+                                   一边操控，一边看实时位姿变化，理解会更快。
+
+【依赖管理与安装】
+sudo apt update                    更新 Ubuntu 软件包索引。
+sudo apt install <包名>            安装系统软件包或额外 ROS2 组件。
+rosdep update --rosdistro humble   更新 `rosdep` 依赖数据库。
+rosdep install --from-paths src --ignore-src -r -y
+                                   为当前工作区源码自动补齐系统依赖。
+apt list --installed | grep ros-humble
+                                   查看当前已经装了哪些 `ros-humble-*` 包。
+
+【图形工具与可视化】
+rviz2                              打开 RViz2，可视化机器人、坐标系和传感器数据。
+rqt                                打开 ROS2 常用图形工具集合。
+rqt_graph                          图形化查看节点之间的通信关系。
+rqt_plot                           画出 topic 数据曲线，调参时很实用。
+
+【实战建议】
+每开一个新 PowerShell 窗口，先输入 `wsl` 再跑 ROS2 命令，最省心。
+工作区尽量放在 `~/ros2_ws` 这类 Linux 家目录里，不要长期放在 `/mnt/d/...`。
+如果命令突然失效，先用 `echo $ROS_DISTRO` 和 `which ros2` 检查环境有没有加载上。
+网络不稳定时，优先先确认代理环境变量是否残留，再去怀疑 ROS2 本身。
