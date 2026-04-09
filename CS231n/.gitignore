@@ -1,0 +1,28 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local submission artifacts
+assignment1/*.pdf
+assignment1/*.zip
+assignment1/*.aux
+assignment1/*.log
+assignment1/*.out
+assignment1/*.tex
+
+# Local datasets
+assignment1/cs231n/datasets/cifar-10-batches-py/
+assignment1/cs231n/datasets/imagenet_val_25.npz
+
+# Local build artifacts
+assignment2/cs231n/build/
+assignment2/cs231n/*.so
+assignment2/cs231n/*.pyd
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
