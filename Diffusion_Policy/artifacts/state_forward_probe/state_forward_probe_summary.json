@@ -1,0 +1,11 @@
+{
+  "zarr_path": "/home/Travor/workspaces/diffusion_policy/data/pusht/pusht_cchi_v7_replay.zarr",
+  "best_checkpoint": "/mnt/d/Code/Learning/EI/EI-learning-notes/Diffusion_Policy/artifacts/state_forward_probe/best_state_forward_probe.pt",
+  "history_csv": "/mnt/d/Code/Learning/EI/EI-learning-notes/Diffusion_Policy/artifacts/state_forward_probe/state_forward_probe_history.csv",
+  "best_val_mse": 0.006284363257197613,
+  "epochs": 30,
+  "seed": 42,
+  "train_episodes": 185,
+  "val_episodes": 21,
+  "device": "cuda"
+}

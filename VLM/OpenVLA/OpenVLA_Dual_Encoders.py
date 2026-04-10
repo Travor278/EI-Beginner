@@ -4,6 +4,22 @@ import torch
 import torch.nn as nn
 
 
+class ImageNormalize(nn.Module):
+    def __init__(
+        self,
+        mean: tuple[float, float, float],
+        std: tuple[float, float, float],
+    ) -> None:
+        super().__init__()
+        self.register_buffer("mean", torch.tensor(mean).view(1, 3, 1, 1))
+        self.register_buffer("std", torch.tensor(std).view(1, 3, 1, 1))
+
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        if images.dim() != 4:
+            raise ValueError("Expected image tensor shape: (B, C, H, W).")
+        return (images - self.mean) / self.std
+
+
 class PatchEmbedding(nn.Module):
     def __init__(
         self,
@@ -192,16 +208,110 @@ class VisionEncoder(nn.Module):
         return x, all_attn_weights
 
 
-class DINOEncoder(VisionEncoder):
+class DINOEncoder(nn.Module):
     """
     DINOv2-like visual branch.
     """
 
+    def __init__(
+        self,
+        image_size: int = 224,
+        patch_size: int = 14,
+        in_channels: int = 3,
+        d_model: int = 1024,
+        num_heads: int = 16,
+        num_layers: int = 12,
+        d_ff: int = 4096,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.branch_name = "dino"
 
-class SigLIPEncoder(VisionEncoder):
+        # DINOv2-style branch usually uses ImageNet-style normalization.
+        self.preprocess = ImageNormalize(
+            mean=(0.485, 0.456, 0.406),
+            std=(0.229, 0.224, 0.225),
+        )
+        self.backbone = VisionEncoder(
+            image_size=image_size,
+            patch_size=patch_size,
+            in_channels=in_channels,
+            d_model=d_model,
+            num_heads=num_heads,
+            num_layers=num_layers,
+            d_ff=d_ff,
+            dropout=dropout,
+            use_cls_token=False,
+        )
+
+    @property
+    def num_patches(self) -> int:
+        return self.backbone.num_patches
+
+    @property
+    def d_model(self) -> int:
+        return self.backbone.d_model
+
+    def forward(
+        self,
+        images: torch.Tensor,
+    ) -> tuple[torch.Tensor, list[torch.Tensor]]:
+        # DINO branch: normalize -> ViT backbone.
+        images = self.preprocess(images)
+        return self.backbone(images)
+
+
+class SigLIPEncoder(nn.Module):
     """
     SigLIP-like visual branch.
     """
+
+    def __init__(
+        self,
+        image_size: int = 224,
+        patch_size: int = 14,
+        in_channels: int = 3,
+        d_model: int = 1024,
+        num_heads: int = 16,
+        num_layers: int = 12,
+        d_ff: int = 4096,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.branch_name = "siglip"
+
+        # SigLIP-style branch commonly uses symmetric normalization.
+        self.preprocess = ImageNormalize(
+            mean=(0.5, 0.5, 0.5),
+            std=(0.5, 0.5, 0.5),
+        )
+        self.backbone = VisionEncoder(
+            image_size=image_size,
+            patch_size=patch_size,
+            in_channels=in_channels,
+            d_model=d_model,
+            num_heads=num_heads,
+            num_layers=num_layers,
+            d_ff=d_ff,
+            dropout=dropout,
+            use_cls_token=False,
+        )
+
+    @property
+    def num_patches(self) -> int:
+        return self.backbone.num_patches
+
+    @property
+    def d_model(self) -> int:
+        return self.backbone.d_model
+
+    def forward(
+        self,
+        images: torch.Tensor,
+    ) -> tuple[torch.Tensor, list[torch.Tensor]]:
+        # SigLIP branch: normalize -> ViT backbone.
+        images = self.preprocess(images)
+        return self.backbone(images)
 
 
 class FusedProjector(nn.Module):
@@ -245,22 +355,22 @@ class OpenVLADualEncoder(nn.Module):
         self.dino_encoder = DINOEncoder(
             image_size=image_size,
             patch_size=patch_size,
+            in_channels=3,
             d_model=dino_dim,
             num_heads=num_heads,
             num_layers=num_layers,
             d_ff=d_ff,
             dropout=dropout,
-            use_cls_token=False,
         )
         self.siglip_encoder = SigLIPEncoder(
             image_size=image_size,
             patch_size=patch_size,
+            in_channels=3,
             d_model=siglip_dim,
             num_heads=num_heads,
             num_layers=num_layers,
             d_ff=d_ff,
             dropout=dropout,
-            use_cls_token=False,
         )
         self.projector = FusedProjector(
             vision_dim=dino_dim + siglip_dim,
@@ -273,6 +383,7 @@ class OpenVLADualEncoder(nn.Module):
         siglip_images: torch.Tensor,
     ) -> dict[str, torch.Tensor | list[torch.Tensor]]:
         # Run the same scene through two different visual branches.
+        # Each branch keeps its own normalization and backbone.
         dino_tokens, dino_attn = self.dino_encoder(dino_images)
         siglip_tokens, siglip_attn = self.siglip_encoder(siglip_images)
 
