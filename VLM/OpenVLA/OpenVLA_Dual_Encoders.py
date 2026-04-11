@@ -2,6 +2,7 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class ImageNormalize(nn.Module):
@@ -18,6 +19,54 @@ class ImageNormalize(nn.Module):
         if images.dim() != 4:
             raise ValueError("Expected image tensor shape: (B, C, H, W).")
         return (images - self.mean) / self.std
+
+
+class ImageResize(nn.Module):
+    def __init__(self, image_size: int) -> None:
+        super().__init__()
+        self.image_size = image_size
+
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        if images.dim() != 4:
+            raise ValueError("Expected image tensor shape: (B, C, H, W).")
+
+        if images.shape[-2:] == (self.image_size, self.image_size):
+            return images
+
+        return F.interpolate(
+            images,
+            size=(self.image_size, self.image_size),
+            mode="bilinear",
+            align_corners=False,
+        )
+
+
+class DINOImageTransform(nn.Module):
+    def __init__(self, image_size: int) -> None:
+        super().__init__()
+        self.resize = ImageResize(image_size=image_size)
+        self.normalize = ImageNormalize(
+            mean=(0.485, 0.456, 0.406),
+            std=(0.229, 0.224, 0.225),
+        )
+
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        images = self.resize(images)
+        return self.normalize(images)
+
+
+class SigLIPImageTransform(nn.Module):
+    def __init__(self, image_size: int) -> None:
+        super().__init__()
+        self.resize = ImageResize(image_size=image_size)
+        self.normalize = ImageNormalize(
+            mean=(0.5, 0.5, 0.5),
+            std=(0.5, 0.5, 0.5),
+        )
+
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        images = self.resize(images)
+        return self.normalize(images)
 
 
 class PatchEmbedding(nn.Module):
@@ -133,11 +182,15 @@ class VisionEncoder(nn.Module):
         d_ff: int = 4096,
         dropout: float = 0.1,
         use_cls_token: bool = False,
+        feature_layer: str = "last",
+        return_attn_weights: bool = True,
     ) -> None:
         super().__init__()
 
         self.d_model = d_model
         self.use_cls_token = use_cls_token
+        self.feature_layer = feature_layer
+        self.return_attn_weights = return_attn_weights
 
         self.patch_embed = PatchEmbedding(
             image_size=image_size,
@@ -200,9 +253,16 @@ class VisionEncoder(nn.Module):
         x = self.embed_dropout(x)
 
         all_attn_weights = []
-        for layer in self.layers:
+        selected_x = None
+        for layer_idx, layer in enumerate(self.layers):
             x, attn_weights = layer(x)
-            all_attn_weights.append(attn_weights)
+            if self.return_attn_weights:
+                all_attn_weights.append(attn_weights)
+            if self.feature_layer == "second_last" and layer_idx == len(self.layers) - 2:
+                selected_x = x
+
+        if self.feature_layer == "second_last" and selected_x is not None:
+            x = selected_x
 
         x = self.final_norm(x)
         return x, all_attn_weights
@@ -211,6 +271,7 @@ class VisionEncoder(nn.Module):
 class DINOEncoder(nn.Module):
     """
     DINOv2-like visual branch.
+    Tends to preserve spatial structure, geometry, and local visual details.
     """
 
     def __init__(
@@ -223,15 +284,16 @@ class DINOEncoder(nn.Module):
         num_layers: int = 12,
         d_ff: int = 4096,
         dropout: float = 0.1,
+        feature_layer: str = "last",
+        return_attn_weights: bool = True,
     ) -> None:
         super().__init__()
         self.branch_name = "dino"
 
-        # DINOv2-style branch usually uses ImageNet-style normalization.
-        self.preprocess = ImageNormalize(
-            mean=(0.485, 0.456, 0.406),
-            std=(0.229, 0.224, 0.225),
-        )
+        # DINO-like branch: stronger on spatial structure, geometry,
+        # and local visual detail modeling.
+        # DINOv2-style branch usually uses a branch-specific image transform.
+        self.preprocess = DINOImageTransform(image_size=image_size)
         self.backbone = VisionEncoder(
             image_size=image_size,
             patch_size=patch_size,
@@ -242,6 +304,8 @@ class DINOEncoder(nn.Module):
             d_ff=d_ff,
             dropout=dropout,
             use_cls_token=False,
+            feature_layer=feature_layer,
+            return_attn_weights=return_attn_weights,
         )
 
     @property
@@ -264,6 +328,7 @@ class DINOEncoder(nn.Module):
 class SigLIPEncoder(nn.Module):
     """
     SigLIP-like visual branch.
+    Tends to be stronger at vision-language semantic alignment and object semantics.
     """
 
     def __init__(
@@ -276,15 +341,15 @@ class SigLIPEncoder(nn.Module):
         num_layers: int = 12,
         d_ff: int = 4096,
         dropout: float = 0.1,
+        feature_layer: str = "last",
+        return_attn_weights: bool = True,
     ) -> None:
         super().__init__()
         self.branch_name = "siglip"
 
-        # SigLIP-style branch commonly uses symmetric normalization.
-        self.preprocess = ImageNormalize(
-            mean=(0.5, 0.5, 0.5),
-            std=(0.5, 0.5, 0.5),
-        )
+        # SigLIP-like branch: stronger on vision-language semantic alignment and object-level semantics.
+        # This is per-channel image normalization, not LayerNorm.
+        self.preprocess = SigLIPImageTransform(image_size=image_size)
         self.backbone = VisionEncoder(
             image_size=image_size,
             patch_size=patch_size,
@@ -295,6 +360,8 @@ class SigLIPEncoder(nn.Module):
             d_ff=d_ff,
             dropout=dropout,
             use_cls_token=False,
+            feature_layer=feature_layer,
+            return_attn_weights=return_attn_weights,
         )
 
     @property
@@ -344,10 +411,15 @@ class OpenVLADualEncoder(nn.Module):
         dino_dim: int = 768,
         siglip_dim: int = 768,
         llm_dim: int = 4096,
-        num_heads: int = 12,
-        num_layers: int = 6,
-        d_ff: int = 3072,
+        dino_num_heads: int = 12,
+        dino_num_layers: int = 6,
+        dino_d_ff: int = 3072,
+        siglip_num_heads: int = 12,
+        siglip_num_layers: int = 6,
+        siglip_d_ff: int = 3072,
         dropout: float = 0.1,
+        feature_layer: str = "last",
+        return_attn_weights: bool = True,
     ) -> None:
         super().__init__()
 
@@ -357,25 +429,43 @@ class OpenVLADualEncoder(nn.Module):
             patch_size=patch_size,
             in_channels=3,
             d_model=dino_dim,
-            num_heads=num_heads,
-            num_layers=num_layers,
-            d_ff=d_ff,
+            num_heads=dino_num_heads,
+            num_layers=dino_num_layers,
+            d_ff=dino_d_ff,
             dropout=dropout,
+            feature_layer=feature_layer,
+            return_attn_weights=return_attn_weights,
         )
         self.siglip_encoder = SigLIPEncoder(
             image_size=image_size,
             patch_size=patch_size,
             in_channels=3,
             d_model=siglip_dim,
-            num_heads=num_heads,
-            num_layers=num_layers,
-            d_ff=d_ff,
+            num_heads=siglip_num_heads,
+            num_layers=siglip_num_layers,
+            d_ff=siglip_d_ff,
             dropout=dropout,
+            feature_layer=feature_layer,
+            return_attn_weights=return_attn_weights,
         )
         self.projector = FusedProjector(
             vision_dim=dino_dim + siglip_dim,
             llm_dim=llm_dim,
         )
+
+    def freeze_backbones(self) -> None:
+        self.dino_encoder.requires_grad_(False)
+        self.siglip_encoder.requires_grad_(False)
+
+    def unfreeze_backbones(self) -> None:
+        self.dino_encoder.requires_grad_(True)
+        self.siglip_encoder.requires_grad_(True)
+
+    def freeze_projector(self) -> None:
+        self.projector.requires_grad_(False)
+
+    def unfreeze_projector(self) -> None:
+        self.projector.requires_grad_(True)
 
     def forward(
         self,
@@ -388,6 +478,10 @@ class OpenVLADualEncoder(nn.Module):
         siglip_tokens, siglip_attn = self.siglip_encoder(siglip_images)
 
         if dino_tokens.shape[:2] != siglip_tokens.shape[:2]:
+            # In a more realistic setup, we could align token grids here:
+            # 1. pool one branch to the other's patch count
+            # 2. add a learnable resampler
+            # 3. interpolate 2D token maps before flattening back to 1D tokens
             raise ValueError("The two encoders must produce the same patch grid.")
 
         # Concatenate along the channel dimension, then project to LLM width.
@@ -422,10 +516,15 @@ def demo_dual_encoder_shapes() -> None:
         dino_dim=512,
         siglip_dim=512,
         llm_dim=1024,
-        num_heads=8,
-        num_layers=3,
-        d_ff=2048,
+        dino_num_heads=8,
+        dino_num_layers=3,
+        dino_d_ff=2048,
+        siglip_num_heads=8,
+        siglip_num_layers=4,
+        siglip_d_ff=2048,
         dropout=0.0,
+        feature_layer="second_last",
+        return_attn_weights=True,
     )
 
     # Demo helper: here both branches read the same tensor.

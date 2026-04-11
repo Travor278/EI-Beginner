@@ -64,9 +64,12 @@ def main() -> None:
 
     print(f"saved_csv={csv_path}")
     if not frame.empty:
-        print(frame.to_markdown(index=False))
+        try:
+            print(frame.to_markdown(index=False))
+        except ImportError:
+            # Keep stage4 dependency-light: tabulate is optional in pandas.
+            print(frame.to_string(index=False))
 
 
 if __name__ == "__main__":
     main()
-
