@@ -1,0 +1,21 @@
+# CS231n local saved models
+CS231n/assignment1/cs231n/saved/*.npy
+
+# Diffusion Policy large local artifacts
+Diffusion_Policy/artifacts/dlos_smoke/
+Diffusion_Policy/artifacts/dlos_smoke_recheck/
+Diffusion_Policy/artifacts/phrew/
+Diffusion_Policy/artifacts/phrew_runs/
+Diffusion_Policy/artifacts/phrew_seed43.log
+Diffusion_Policy/artifacts/phrew_seed43/
+Diffusion_Policy/artifacts/wm_probe_full_seed42.pid
+Diffusion_Policy/artifacts/wm_probe_full_seed42/
+Diffusion_Policy/artifacts/wm_probe_smoke/
+
+# Locally generated shareable bundles; keep the committed analysis-only snapshot
+Diffusion_Policy/artifacts_shareable/
+Diffusion_Policy/artifacts_shareable_novideo/
+
+# Python cache
+Diffusion_Policy/dlos_dp/__pycache__/
+Diffusion_Policy/pred_hardness/__pycache__/
