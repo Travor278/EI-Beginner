@@ -19,3 +19,13 @@ Diffusion_Policy/artifacts_shareable_novideo/
 # Python cache
 Diffusion_Policy/dlos_dp/__pycache__/
 Diffusion_Policy/pred_hardness/__pycache__/
+Diffusion_Policy/sfc_dp/__pycache__/
+
+# SFC-DP local artifacts
+Diffusion_Policy/artifacts/sfc_smoke/
+Diffusion_Policy/artifacts/run_sfc_grid_tmp.sh
+Diffusion_Policy/artifacts/sfc_ad_seed42.log
+Diffusion_Policy/artifacts/sfc_ad_seed42.pid
+Diffusion_Policy/artifacts/sfc_runs/*/checkpoints/
+Diffusion_Policy/artifacts/sfc_runs/*/media/
+Diffusion_Policy/artifacts/sfc_runs/*/best.pt
