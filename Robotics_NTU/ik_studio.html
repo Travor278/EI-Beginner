@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IK Studio</title>
+<style>
+:root{--bg:#07111a;--bg2:#0c1823;--panel:rgba(8,18,28,.88);--line:rgba(124,228,255,.16);--text:#ecf8ff;--muted:#8eacbe;--acc:#7ce4ff;--warn:#ffb867;--bad:#ff7b7b}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{overflow:hidden;color:var(--text);font-family:"Bahnschrift","Segoe UI Variable","Segoe UI",sans-serif;background:radial-gradient(circle at 15% 15%,rgba(124,228,255,.13),transparent 24%),radial-gradient(circle at 82% 12%,rgba(255,184,103,.10),transparent 18%),linear-gradient(160deg,#02080d 0%,var(--bg) 36%,var(--bg2) 100%)}
+.app{display:grid;grid-template-columns:360px 1fr;height:100%}
+.panel{display:flex;flex-direction:column;gap:14px;padding:16px;min-height:0;background:linear-gradient(180deg,rgba(8,18,28,.95),rgba(7,16,25,.74));border-right:1px solid var(--line);backdrop-filter:blur(20px);z-index:2}
+.scroll{flex:1;min-height:0;overflow:auto;padding-right:6px;padding-bottom:28px}
+.scroll::-webkit-scrollbar{width:10px}.scroll::-webkit-scrollbar-thumb{background:rgba(124,228,255,.14);border-radius:999px}
+.hero,.sec,.hud,.credit{border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(18px)}
+.hero{padding:16px;border-radius:22px;background:radial-gradient(circle at top right,rgba(124,228,255,.16),transparent 26%),linear-gradient(180deg,rgba(14,30,45,.92),rgba(9,19,30,.88))}
+.eyebrow{display:inline-flex;padding:6px 10px;border-radius:999px;border:1px solid rgba(124,228,255,.18);background:rgba(124,228,255,.08);color:var(--acc);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.hero h1{margin:12px 0 8px;font-size:30px;letter-spacing:-.04em}
+.hero p{margin:0;color:#b3c9d8;font-size:13px;line-height:1.6}
+.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.meta div{padding:10px 12px;border-radius:16px;background:rgba(124,228,255,.06);border:1px solid rgba(124,228,255,.12)}
+.meta b{display:block;font-size:14px}.meta span{font-size:10px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.sec{padding:14px;border-radius:20px}
+.sec h2{margin:0 0 12px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.grid2,.grid3,.stats{display:grid;gap:10px}.grid2{grid-template-columns:repeat(2,1fr)}.grid3{grid-template-columns:repeat(3,1fr)}.stats{grid-template-columns:repeat(2,1fr)}
+button,input{font:inherit}
+.btn,.mode,.preset{border:1px solid rgba(124,228,255,.16);background:rgba(124,228,255,.04);color:var(--text);border-radius:16px;transition:.18s;cursor:pointer}
+.btn:hover,.mode:hover,.preset:hover{transform:translateY(-1px);border-color:rgba(124,228,255,.42)}
+.mode.active,.preset.active,.btn.active{background:linear-gradient(180deg,rgba(124,228,255,.22),rgba(124,228,255,.10));border-color:rgba(124,228,255,.6);box-shadow:0 0 0 1px rgba(124,228,255,.2) inset,0 8px 24px rgba(124,228,255,.12)}
+.mode,.preset,.btn{padding:11px 12px;font-size:12px;font-weight:600}
+.mode small,.preset small{display:block;color:var(--muted);font-size:11px;line-height:1.45;margin-top:3px}
+.sliders{display:grid;gap:12px}
+.row{padding:12px;border-radius:18px;background:rgba(124,228,255,.04);border:1px solid rgba(124,228,255,.10)}
+.head{display:flex;justify-content:space-between;gap:10px;margin-bottom:8px}
+.name{font-size:14px;font-weight:600}.val{color:var(--acc);font:12px Consolas,monospace}
+input[type=range]{width:100%;height:28px;margin:0;accent-color:var(--acc);background:transparent}
+.stat{padding:12px;border-radius:16px;background:rgba(124,228,255,.05);border:1px solid rgba(124,228,255,.10)}.stat span{display:block}
+.lab{color:var(--muted);font-size:10px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}.num{font:15px Consolas,monospace}
+.note{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.55}
+.stage{position:relative;min-width:0}#vp{position:absolute;inset:0}
+.hud{position:absolute;left:18px;right:18px;top:18px;display:flex;justify-content:space-between;gap:14px;padding:12px 14px;border-radius:18px;pointer-events:none}
+.hud strong{display:block;font-size:13px}.hud span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.pills{display:flex;gap:8px;flex-wrap:wrap}.pill{padding:8px 10px;border-radius:999px;border:1px solid rgba(124,228,255,.14);background:rgba(124,228,255,.08);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.credit{position:absolute;right:18px;bottom:18px;padding:10px 12px;border-radius:16px;color:var(--muted);font-size:11px;line-height:1.55}.credit b{color:#fff}
+@media (max-width:1180px){.app{grid-template-columns:1fr}.panel{position:absolute;left:16px;top:16px;bottom:16px;width:min(360px,calc(100vw - 32px));border:1px solid var(--line);border-radius:26px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <section class="hero">
+      <div class="eyebrow">Chapter 04 IK Studio</div>
+      <h1>Branch Explorer</h1>
+      <p>Built on the same standalone-viewer stack as Chapter03, this Three.js + OrbitControls scene combines the target, workspace, IK branches, and singularity cues in one GPU view.</p>
+      <div class="meta"><div><span>Renderer</span><b>WebGL</b></div><div><span>Focus</span><b>IK / Singularity</b></div><div><span>Branch</span><b>Auto / Manual</b></div></div>
+    </section>
+    <div class="scroll">
+      <section class="sec"><h2>Target</h2><div class="sliders" id="sliders"></div></section>
+      <section class="sec"><h2>Branch Mode</h2><div class="grid3"><button class="mode active" data-mode="auto">Auto<small>Closest to the current joint state</small></button><button class="mode" data-mode="elbow-up">Elbow Up<small>Lock to the elbow-up branch</small></button><button class="mode" data-mode="elbow-down">Elbow Down<small>Lock to the elbow-down branch</small></button></div></section>
+      <section class="sec"><h2>Presets</h2><div class="grid2"><button class="preset active" data-preset="reach">Reachable<small>A standard reachable point</small></button><button class="preset" data-preset="outer">Outer Boundary<small>Near theta2 = 0</small></button><button class="preset" data-preset="inner">Inner Boundary<small>Near theta2 = 180</small></button><button class="preset" data-preset="left">Left Reach<small>Move across the workspace to inspect continuity</small></button></div></section>
+      <section class="sec"><h2>Display</h2><div class="grid2"><button class="btn active" id="tg-axes">Axes<small>Show the end-effector local frame</small></button><button class="btn active" id="tg-target">Target Stem<small>Highlight the target and its projection</small></button></div></section>
+      <section class="sec"><h2>Status</h2><div class="stats"><div class="stat"><span class="lab">x</span><span class="num" id="xv">0.0000</span></div><div class="stat"><span class="lab">y</span><span class="num" id="yv">0.0000</span></div><div class="stat"><span class="lab">theta1</span><span class="num" id="t1v">0.0 deg</span></div><div class="stat"><span class="lab">theta2</span><span class="num" id="t2v">0.0 deg</span></div><div class="stat"><span class="lab">detJ</span><span class="num" id="djv">0.0000</span></div><div class="stat"><span class="lab">branch</span><span class="num" id="brv">auto</span></div><div class="stat"><span class="lab">reach</span><span class="num" id="rv">reachable</span></div><div class="stat"><span class="lab">status</span><span class="num" id="sv">ok</span></div></div><div class="note" id="note">Auto mode prefers the branch closest to the current joint state, making branch continuity easier to observe while dragging the target.</div></section>
+    </div>
+  </aside>
+  <main class="stage">
+    <div id="vp"></div>
+    <div class="hud"><div><strong>2R Analytical IK</strong><span>The annulus workspace, end-effector marker, two links, and local frame update together in one view.</span></div><div class="pills"><div class="pill">Two Branches</div><div class="pill">Singularity Aware</div><div class="pill">Standalone Viewer</div></div></div>
+    <div class="credit"><b>Tip</b><br>Left drag to orbit, right drag to pan, and scroll to zoom.<br>Drag the target and watch the two IK branches merge near the workspace boundary.</div>
+  </main>
+</div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as T from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+const L1 = 1.2, L2 = 0.9, INNER = Math.abs(L1 - L2), OUTER = L1 + L2;
+const $ = (id) => document.getElementById(id);
+
+const ui = {
+  sliders: $('sliders'),
+  xv: $('xv'), yv: $('yv'), t1v: $('t1v'), t2v: $('t2v'),
+  djv: $('djv'), brv: $('brv'), rv: $('rv'), sv: $('sv'), note: $('note'),
+  targetBtn: $('tg-target'), axesBtn: $('tg-axes'),
+  modes: [...document.querySelectorAll('.mode')],
+  presets: [...document.querySelectorAll('.preset')]
+};
+
+const vp = $('vp');
+const ren = new T.WebGLRenderer({antialias: true, powerPreference: 'high-performance'});
+ren.setPixelRatio(Math.min(devicePixelRatio, 2));
+ren.outputColorSpace = T.SRGBColorSpace;
+ren.shadowMap.enabled = true;
+ren.shadowMap.type = T.VSMShadowMap;
+ren.toneMapping = T.ACESFilmicToneMapping;
+ren.toneMappingExposure = 1.05;
+vp.appendChild(ren.domElement);
+
+const scene = new T.Scene();
+scene.background = new T.Color(0x050c13);
+scene.fog = new T.FogExp2(0x071019, 0.045);
+const cam = new T.PerspectiveCamera(42, 1, 0.02, 90);
+cam.position.set(3.5, 2.6, 3.5);
+const ctrl = new OrbitControls(cam, ren.domElement);
+ctrl.enableDamping = true;
+ctrl.dampingFactor = 0.06;
+ctrl.minDistance = 1.0;
+ctrl.maxDistance = 18;
+ctrl.target.set(0, 0.32, 0);
+
+function resize(){
+  const w = vp.clientWidth, h = vp.clientHeight;
+  ren.setSize(w, h);
+  cam.aspect = w / h;
+  cam.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+scene.add(new T.HemisphereLight(0xa8dbff, 0x081018, 1.1));
+const key = new T.DirectionalLight(0xffffff, 3.2);
+key.position.set(4.2, 6.4, 2.6);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, {left: -6, right: 6, top: 6, bottom: -6, near: 0.3, far: 22});
+scene.add(key);
+const rim = new T.DirectionalLight(0x89b7ff, 0.9); rim.position.set(-5.2, 2.5, -3.4); scene.add(rim);
+const fill = new T.PointLight(0xffcf92, 0.8, 18, 2); fill.position.set(0, 3.0, 0); scene.add(fill);
+
+const floor = new T.Mesh(
+  new T.CircleGeometry(7.0, 120),
+  new T.MeshPhysicalMaterial({color: 0x0a1823, roughness: 0.86, metalness: 0.08, clearcoat: 0.24, clearcoatRoughness: 0.38})
+);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+const grid = new T.GridHelper(10, 40, 0x2d6b84, 0x143243);
+grid.material.transparent = true;
+grid.material.opacity = 0.32;
+scene.add(grid);
+
+function ringPoints(r, y=0.002, n=180){
+  const pts = [];
+  for(let i=0;i<n;i++){
+    const t = i / n * Math.PI * 2;
+    pts.push(new T.Vector3(r * Math.cos(t), y, -r * Math.sin(t)));
+  }
+  return pts;
+}
+scene.add(new T.LineLoop(new T.BufferGeometry().setFromPoints(ringPoints(OUTER)), new T.LineBasicMaterial({color:0x7ce4ff, transparent:true, opacity:0.52})));
+scene.add(new T.LineLoop(new T.BufferGeometry().setFromPoints(ringPoints(INNER)), new T.LineBasicMaterial({color:0xc084fc, transparent:true, opacity:0.48})));
+
+const mats = {
+  base: new T.MeshPhysicalMaterial({color: 0x102334, roughness: 0.36, metalness: 0.78, clearcoat: 0.42}),
+  joint: new T.MeshPhysicalMaterial({color: 0xeaf7ff, roughness: 0.18, metalness: 1, clearcoat: 0.72}),
+  link1: new T.MeshPhysicalMaterial({color: 0x27b7ff, roughness: 0.28, metalness: 0.64, clearcoat: 0.34}),
+  link2: new T.MeshPhysicalMaterial({color: 0x64da7d, roughness: 0.28, metalness: 0.64, clearcoat: 0.34}),
+  ee: new T.MeshPhysicalMaterial({color: 0xffc56f, emissive: 0x6f2b00, emissiveIntensity: 1.1, roughness: 0.16, metalness: 0.96}),
+  bad: new T.MeshPhysicalMaterial({color: 0xff7b7b, emissive: 0x5f1414, emissiveIntensity: 0.7, roughness: 0.22, metalness: 0.84})
+};
+const root = new T.Group(); scene.add(root);
+const targetRoot = new T.Group(); scene.add(targetRoot);
+const arm = {};
+
+function mkLink(mat){
+  const g = new T.Group();
+  const body = new T.Mesh(new T.CylinderGeometry(1, 1, 1, 28, 1, true), mat);
+  const a = new T.Mesh(new T.SphereGeometry(1, 26, 26), mat);
+  const b = new T.Mesh(new T.SphereGeometry(1, 26, 26), mat);
+  [body, a, b].forEach((m) => { m.castShadow = true; m.receiveShadow = true; g.add(m); });
+  g.userData = {body, a, b};
+  return g;
+}
+function setLink(link, p1, p2, r){
+  const dir = new T.Vector3().subVectors(p2, p1), L = dir.length();
+  if(L < 1e-4){ link.visible = false; return; }
+  link.visible = true;
+  link.position.copy(p1).add(p2).multiplyScalar(0.5);
+  link.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir.clone().normalize());
+  const h = Math.max(L - 2 * r, 0.001), u = link.userData;
+  u.body.scale.set(r, h, r);
+  u.a.scale.set(r, r, r);
+  u.b.scale.set(r, r, r);
+  u.a.position.set(0, h * 0.5, 0);
+  u.b.position.set(0, -h * 0.5, 0);
+}
+function mapP(x, y, lift=0.12){ return new T.Vector3(x, lift, -y); }
+function wrapDeg(a){ return (a + 180) % 360 - 180; }
+function angularDistance(a, b){
+  const d1 = wrapDeg(a[0] - b[0]), d2 = wrapDeg(a[1] - b[1]);
+  return Math.hypot(d1, d2);
+}
+function fk(theta1, theta2){
+  const t1 = theta1 * Math.PI / 180;
+  const t12 = (theta1 + theta2) * Math.PI / 180;
+  const p0 = [0, 0];
+  const p1 = [L1 * Math.cos(t1), L1 * Math.sin(t1)];
+  const p2 = [p1[0] + L2 * Math.cos(t12), p1[1] + L2 * Math.sin(t12)];
+  return [p0, p1, p2];
+}
+function ik(x, y){
+  const r2 = x * x + y * y;
+  let c2 = (r2 - L1 * L1 - L2 * L2) / (2 * L1 * L2);
+  if(c2 < -1 || c2 > 1) return [];
+  c2 = Math.max(-1, Math.min(1, c2));
+  const s2abs = Math.sqrt(Math.max(0, 1 - c2 * c2));
+  const out = [];
+  [['elbow-up', s2abs], ['elbow-down', -s2abs]].forEach(([branch, s2]) => {
+    const theta2 = Math.atan2(s2, c2) * 180 / Math.PI;
+    const k1 = L1 + L2 * c2, k2 = L2 * s2;
+    const theta1 = (Math.atan2(y, x) - Math.atan2(k2, k1)) * 180 / Math.PI;
+    out.push({branch, theta1: wrapDeg(theta1), theta2: wrapDeg(theta2), detJ: L1 * L2 * Math.sin(theta2 * Math.PI / 180)});
+  });
+  out.sort((a, b) => b.theta2 - a.theta2);
+  return out;
+}
+function workspaceState(x, y){
+  const r = Math.hypot(x, y);
+  if(r < INNER - 1e-9) return 'too-close';
+  if(r > OUTER + 1e-9) return 'too-far';
+  if(Math.abs(r - INNER) < 0.015 || Math.abs(r - OUTER) < 0.015) return 'boundary';
+  return 'reachable';
+}
+
+function buildArm(){
+  const pedestal = new T.Mesh(new T.CylinderGeometry(0.17, 0.21, 0.12, 40), mats.base);
+  pedestal.position.y = 0.06;
+  pedestal.castShadow = pedestal.receiveShadow = true;
+  root.add(pedestal);
+  const cap = new T.Mesh(new T.CylinderGeometry(0.14, 0.14, 0.035, 40), mats.joint);
+  cap.position.y = 0.137;
+  cap.castShadow = true;
+  root.add(cap);
+  arm.link1 = mkLink(mats.link1); root.add(arm.link1);
+  arm.link2 = mkLink(mats.link2); root.add(arm.link2);
+  arm.j0 = new T.Mesh(new T.SphereGeometry(0.095, 28, 28), mats.joint); root.add(arm.j0);
+  arm.j1 = new T.Mesh(new T.SphereGeometry(0.082, 28, 28), mats.joint); root.add(arm.j1);
+  arm.ee = new T.Mesh(new T.SphereGeometry(0.068, 30, 30), mats.ee); root.add(arm.ee);
+  [arm.j0, arm.j1, arm.ee].forEach((m) => { m.castShadow = m.receiveShadow = true; });
+  arm.axes = new T.AxesHelper(0.24); root.add(arm.axes);
+
+  arm.targetStem = new T.Line(
+    new T.BufferGeometry().setFromPoints([new T.Vector3(), new T.Vector3(0, 1, 0)]),
+    new T.LineDashedMaterial({color:0xffc987, dashSize:0.08, gapSize:0.05, transparent:true, opacity:0.55})
+  );
+  targetRoot.add(arm.targetStem);
+  arm.targetStem.computeLineDistances();
+  arm.targetRing = new T.Mesh(new T.RingGeometry(0.055, 0.078, 48), new T.MeshBasicMaterial({color:0xffb867, transparent:true, opacity:0.56, side:T.DoubleSide}));
+  arm.targetRing.rotation.x = -Math.PI / 2;
+  targetRoot.add(arm.targetRing);
+  arm.targetGlow = new T.Mesh(new T.TorusGeometry(0.078, 0.008, 12, 64), new T.MeshBasicMaterial({color:0xffb867, transparent:true, opacity:0.92}));
+  arm.targetGlow.rotation.x = -Math.PI / 2;
+  targetRoot.add(arm.targetGlow);
+  arm.targetBall = new T.Mesh(new T.SphereGeometry(0.052, 28, 28), mats.ee.clone());
+  arm.targetBall.castShadow = true;
+  targetRoot.add(arm.targetBall);
+}
+buildArm();
+
+const state = {
+  x: 1.2,
+  y: 0.75,
+  mode: 'auto',
+  showAxes: true,
+  showTarget: true,
+  current: [25, 35]
+};
+
+const SLIDER_CFG = [
+  {key: 'x', label: 'target x', min: -2.0, max: 2.0, step: 0.01},
+  {key: 'y', label: 'target y', min: -2.0, max: 2.0, step: 0.01}
+];
+function buildSliders(){
+  ui.sliders.innerHTML = '';
+  SLIDER_CFG.forEach((cfg) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<div class="head"><span class="name">${cfg.label}</span><span class="val" id="val-${cfg.key}">${state[cfg.key].toFixed(2)}</span></div><input type="range" id="sl-${cfg.key}" min="${cfg.min}" max="${cfg.max}" step="${cfg.step}" value="${state[cfg.key]}">`;
+    const input = row.querySelector('input');
+    input.addEventListener('input', () => {
+      state[cfg.key] = parseFloat(input.value);
+      row.querySelector('.val').textContent = state[cfg.key].toFixed(2);
+      update();
+    });
+    ui.sliders.appendChild(row);
+  });
+}
+buildSliders();
+
+ui.modes.forEach((btn) => btn.addEventListener('click', () => {
+  ui.modes.forEach((b) => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.mode = btn.dataset.mode;
+  update();
+}));
+ui.presets.forEach((btn) => btn.addEventListener('click', () => {
+  ui.presets.forEach((b) => b.classList.remove('active'));
+  btn.classList.add('active');
+  const preset = btn.dataset.preset;
+  const presets = {
+    reach: [1.20, 0.75],
+    outer: [2.06, 0.05],
+    inner: [0.32, 0.02],
+    left: [-0.85, 1.05]
+  };
+  [state.x, state.y] = presets[preset];
+  $('sl-x').value = state.x; $('sl-y').value = state.y;
+  $('val-x').textContent = state.x.toFixed(2); $('val-y').textContent = state.y.toFixed(2);
+  update();
+}));
+ui.axesBtn.addEventListener('click', () => { state.showAxes = !state.showAxes; ui.axesBtn.classList.toggle('active', state.showAxes); update(); });
+ui.targetBtn.addEventListener('click', () => { state.showTarget = !state.showTarget; ui.targetBtn.classList.toggle('active', state.showTarget); update(); });
+
+function updateTargetVisual(x, y, reachable){
+  const floorP = mapP(x, y, 0.004);
+  const topP = mapP(x, y, 0.12);
+  arm.targetRing.position.copy(floorP);
+  arm.targetGlow.position.copy(floorP).add(new T.Vector3(0, 0.002, 0));
+  arm.targetBall.position.copy(topP);
+  const geom = new T.BufferGeometry().setFromPoints([floorP, topP]);
+  arm.targetStem.geometry.dispose();
+  arm.targetStem.geometry = geom;
+  arm.targetStem.computeLineDistances();
+  arm.targetStem.visible = state.showTarget;
+  arm.targetRing.visible = state.showTarget;
+  arm.targetGlow.visible = state.showTarget;
+  arm.targetBall.visible = true;
+  arm.targetBall.material = reachable ? mats.ee : mats.bad;
+}
+
+function chooseSolution(solutions){
+  if(!solutions.length) return null;
+  if(state.mode === 'elbow-up') return solutions.find((s) => s.branch === 'elbow-up') || null;
+  if(state.mode === 'elbow-down') return solutions.find((s) => s.branch === 'elbow-down') || null;
+  let best = solutions[0], bestCost = Infinity;
+  solutions.forEach((sol) => {
+    const cost = angularDistance([sol.theta1, sol.theta2], state.current);
+    if(cost < bestCost){ best = sol; bestCost = cost; }
+  });
+  return best;
+}
+
+function setArm(theta1, theta2, reachable){
+  const [p0, p1, p2] = fk(theta1, theta2);
+  const a0 = mapP(p0[0], p0[1]), a1 = mapP(p1[0], p1[1]), a2 = mapP(p2[0], p2[1]);
+  setLink(arm.link1, a0, a1, 0.06);
+  setLink(arm.link2, a1, a2, 0.05);
+  arm.j0.position.copy(a0);
+  arm.j1.position.copy(a1);
+  arm.ee.position.copy(a2);
+  arm.ee.material = reachable ? mats.ee : mats.bad;
+  arm.axes.position.copy(a2);
+  const phi = (theta1 + theta2) * Math.PI / 180;
+  arm.axes.setRotationFromMatrix(new T.Matrix4().makeRotationY(0));
+  arm.axes.rotation.set(0, -phi, 0);
+  arm.axes.visible = state.showAxes && reachable;
+}
+
+function updateStats(solution, reachState){
+  ui.xv.textContent = state.x.toFixed(4);
+  ui.yv.textContent = state.y.toFixed(4);
+  ui.rv.textContent = reachState;
+  if(solution){
+    ui.t1v.textContent = solution.theta1.toFixed(1) + ' deg';
+    ui.t2v.textContent = solution.theta2.toFixed(1) + ' deg';
+    ui.djv.textContent = solution.detJ.toFixed(4);
+    ui.brv.textContent = state.mode === 'auto' ? 'auto -> ' + solution.branch : solution.branch;
+    ui.sv.textContent = Math.abs(solution.detJ) < 1e-3 ? 'near singular' : 'ok';
+    ui.note.textContent = Math.abs(solution.detJ) < 1e-3
+      ? 'The current target is close to the boundary, so the velocity ellipse flattens and one end-effector direction becomes hard to control.'
+      : 'Drag the target to see how Auto preserves branch continuity and how det(J) decays near the boundary.';
+  }else{
+    ui.t1v.textContent = 'N/A';
+    ui.t2v.textContent = 'N/A';
+    ui.djv.textContent = 'N/A';
+    ui.brv.textContent = state.mode;
+    ui.sv.textContent = 'no IK';
+    ui.note.textContent = 'The current target lies outside the annulus workspace, so analytical IK has no solution here.';
+  }
+}
+
+function update(){
+  const reachState = workspaceState(state.x, state.y);
+  const solutions = ik(state.x, state.y);
+  const chosen = chooseSolution(solutions);
+  updateTargetVisual(state.x, state.y, reachState !== 'too-close' && reachState !== 'too-far');
+  if(chosen){
+    state.current = [chosen.theta1, chosen.theta2];
+    setArm(chosen.theta1, chosen.theta2, true);
+  }else{
+    setArm(state.current[0], state.current[1], false);
+  }
+  updateStats(chosen, reachState);
+}
+
+update();
+(function anim(){
+  requestAnimationFrame(anim);
+  ctrl.update();
+  ren.render(scene, cam);
+})();
+</script>
+</body>
+</html>
