@@ -1,0 +1,14 @@
+{
+  "mode": "uniform",
+  "temperature": 0.1,
+  "alpha": 1.0,
+  "seed": 42,
+  "epochs": 1,
+  "batch_size": 8,
+  "lr": 0.0001,
+  "eval_every": 1,
+  "best_metric": 0.0,
+  "best_val_loss": 0.0685060051841694,
+  "chunk_hardness": "/mnt/d/Code/Learning/EI/EI-learning-notes/Diffusion_Policy/artifacts/phrew/chunk_hardness_norm.npy",
+  "zarr_path": "/home/Travor/workspaces/diffusion_policy/data/pusht/pusht_cchi_v7_replay.zarr"
+}
