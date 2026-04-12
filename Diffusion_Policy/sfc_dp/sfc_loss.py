@@ -98,6 +98,8 @@ def sfc_loss(
     group: str = "D",
     soft_mask: bool = False,
     soft_mask_tau: float = 0.05,
+    x0_clamp: float = 3.0,         # clamp x̂₀|k before DCT to prevent
+                                   # exploding coefficients from untrained ε_θ
 ) -> torch.Tensor:
     """
     Compute L_freq for the requested ablation group.
@@ -151,6 +153,12 @@ def sfc_loss(
     else:
         # Groups B / D / E: supervise DCT(x̂₀|k) vs DCT(x₀)
         x0_hat = compute_x0_hat(noisy_action, noise_pred, timesteps, alphas_cumprod)
+        # Clamp before DCT: at epoch 0 the untrained ε_θ produces large
+        # random values; dividing by √ᾱ_k (small at high k) amplifies them
+        # further, making DCT coefficients enormous and L_freq ≫ L_diff.
+        # Normalised actions live in roughly [-1, 1], so ±3σ is a safe limit.
+        if x0_clamp > 0:
+            x0_hat = x0_hat.clamp(-x0_clamp, x0_clamp)
         if group == "E":
             # Stop gradient — ablates whether gradient path through x̂₀|k matters
             x0_hat = x0_hat.detach()
@@ -190,15 +198,17 @@ class SFCLoss(nn.Module):
         self,
         noise_scheduler,
         group: str = "D",
-        lambda_freq: float = 0.1,
+        lambda_freq: float = 0.001,
         soft_mask: bool = False,
         soft_mask_tau: float = 0.05,
+        x0_clamp: float = 3.0,
     ) -> None:
         super().__init__()
         self.group = group
         self.lambda_freq = lambda_freq
         self.soft_mask = soft_mask
         self.soft_mask_tau = soft_mask_tau
+        self.x0_clamp = x0_clamp
 
         # Register as buffer (not a parameter, moves with .to(device))
         acp = noise_scheduler.alphas_cumprod
@@ -212,9 +222,19 @@ class SFCLoss(nn.Module):
         noisy_action: torch.Tensor,
         gt_action: torch.Tensor,
         timesteps: torch.Tensor,
+        effective_lambda: float | None = None,
     ) -> torch.Tensor:
-        """Return λ · L_freq (scalar)."""
-        return self.lambda_freq * sfc_loss(
+        """Return λ · L_freq (scalar).
+
+        Parameters
+        ----------
+        effective_lambda : float, optional
+            Override the stored lambda_freq for this forward pass.
+            Used by the training loop to implement warmup without
+            mutating the module state.
+        """
+        lam = effective_lambda if effective_lambda is not None else self.lambda_freq
+        return lam * sfc_loss(
             noise_pred=noise_pred,
             noisy_action=noisy_action,
             gt_action=gt_action,
@@ -223,10 +243,12 @@ class SFCLoss(nn.Module):
             group=self.group,
             soft_mask=self.soft_mask,
             soft_mask_tau=self.soft_mask_tau,
+            x0_clamp=self.x0_clamp,
         )
 
     def extra_repr(self) -> str:
         return (
             f"group={self.group!r}, lambda_freq={self.lambda_freq}, "
-            f"soft_mask={self.soft_mask}, dct_backend={_DCT_BACKEND!r}"
+            f"x0_clamp={self.x0_clamp}, soft_mask={self.soft_mask}, "
+            f"dct_backend={_DCT_BACKEND!r}"
         )

@@ -21,7 +21,18 @@ class SFCConfig:
 
     group: str = "D"
 
-    lambda_freq: float = 0.1
+    # ---------------------------------------------------------------------- #
+    # L_freq weight and warmup                                                 #
+    # ---------------------------------------------------------------------- #
+    # Empirical finding (seed=42, 100 epochs):
+    #   epoch-0 L_freq ≈ 87 (untrained network), L_diff ≈ 0.22
+    #   λ=0.1 → λ·L_freq ≈ 8.76, which is 39× L_diff → training collapses
+    #   for the first 30 epochs before L_freq decays.
+    #   Fix: reduce λ to 0.001 AND ramp it up over lambda_warmup_epochs so
+    #   the effective weight starts near 0 and reaches λ_freq by warmup end.
+    lambda_freq: float = 0.001          # was 0.1; reduced 100× to keep
+                                        # λ·L_freq ≤ L_diff at epoch 0
+    lambda_warmup_epochs: int = 20      # linearly ramp λ from 0 → lambda_freq
     soft_mask: bool = False
     soft_mask_tau: float = 0.05
 

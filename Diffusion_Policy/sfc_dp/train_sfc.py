@@ -44,6 +44,24 @@ def json_safe_metrics(metrics: dict) -> dict:
     return safe
 
 
+def lambda_with_warmup(
+    epoch: int,
+    lambda_freq: float,
+    warmup_epochs: int,
+) -> float:
+    """Linearly ramp lambda from 0 → lambda_freq over warmup_epochs.
+
+    Rationale: at epoch 0 the untrained network produces L_freq ≈ 87,
+    while L_diff ≈ 0.22.  Even λ=0.001 gives λ·L_freq ≈ 0.087 at epoch 0,
+    which is still ~40% of L_diff.  A short linear warmup (default 20 epochs)
+    ensures the freq term starts from zero and grows gradually, preventing
+    early-training collapse without sacrificing final signal strength.
+    """
+    if warmup_epochs <= 0:
+        return lambda_freq
+    return lambda_freq * min(1.0, epoch / warmup_epochs)
+
+
 def build_policy_class(base_policy_cls):
     class SFCPolicy(base_policy_cls):
         def __init__(self, *args, _sfc_cfg: SFCConfig, **kwargs):
@@ -295,6 +313,10 @@ def train(cfg: SFCConfig, args: argparse.Namespace) -> None:
     with log_path.open("w", encoding="utf-8") as f:
         for epoch in range(start_epoch, cfg.epochs):
             policy.train()
+            # λ warmup: ramp from 0 → lambda_freq over lambda_warmup_epochs
+            policy.sfc_loss_fn.lambda_freq = lambda_with_warmup(
+                epoch, cfg.lambda_freq, cfg.lambda_warmup_epochs
+            )
             train_sum, diff_sum, freq_sum, train_cnt = 0.0, 0.0, 0.0, 0
             for batch_idx, batch in enumerate(train_loader):
                 if args.max_train_batches is not None and batch_idx >= args.max_train_batches:
@@ -394,6 +416,7 @@ def train(cfg: SFCConfig, args: argparse.Namespace) -> None:
                 "batch_size": cfg.batch_size,
                 "lr": cfg.lr,
                 "lambda_freq": cfg.lambda_freq,
+                "lambda_warmup_epochs": cfg.lambda_warmup_epochs,
                 "soft_mask": cfg.soft_mask,
                 "soft_mask_tau": cfg.soft_mask_tau,
                 "eval_every": args.eval_every,
@@ -423,7 +446,11 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--lambda-freq", type=float, default=0.1)
+    parser.add_argument("--lambda-freq", type=float, default=0.001,
+                        help="Weight on L_freq; reduced from 0.1 (initial L_freq≈87 "
+                             "caused 39× L_diff at epoch 0, collapsing early training)")
+    parser.add_argument("--lambda-warmup-epochs", type=int, default=20,
+                        help="Linear warmup: ramp λ from 0 → lambda_freq over this many epochs")
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--soft-mask", action="store_true")
     parser.add_argument("--soft-mask-tau", type=float, default=0.05)
@@ -463,6 +490,7 @@ def main() -> None:
         batch_size=args.batch_size,
         lr=args.lr,
         lambda_freq=args.lambda_freq,
+        lambda_warmup_epochs=args.lambda_warmup_epochs,
         soft_mask=args.soft_mask,
         soft_mask_tau=args.soft_mask_tau,
         device=args.device,
