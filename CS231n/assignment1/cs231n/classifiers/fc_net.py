@@ -25,10 +25,10 @@ class TwoLayerNet(object):
 
     def __init__(
         self,
-        input_dim=3 * 32 * 32,
-        hidden_dim=100,
-        num_classes=10,
-        weight_scale=1e-3,
+        input_dim=3 * 32 * 32, # D
+        hidden_dim=100,        # M
+        num_classes=10,        # C
+        weight_scale=1e-3,     # std
         reg=0.0,
     ):
         """
@@ -54,6 +54,10 @@ class TwoLayerNet(object):
         # and biases using the keys 'W1' and 'b1' and second layer                 #
         # weights and biases using the keys 'W2' and 'b2'.                         #
         ############################################################################
+        self.params['W1'] = weight_scale * np.random.randn(input_dim, hidden_dim)
+        self.params['b1'] = np.zeros(hidden_dim)
+        self.params['W2'] = weight_scale * np.random.randn(hidden_dim, num_classes)
+        self.params['b2'] = np.zeros(num_classes)
 
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -83,6 +87,9 @@ class TwoLayerNet(object):
         # TODO: Implement the forward pass for the two-layer net, computing the    #
         # class scores for X and storing them in the scores variable.              #
         ############################################################################
+        W1,b1 = self.params['W1'], self.params['b1']
+        W2,b2 = self.params['W2'], self.params['b2']
+        
 
         ############################################################################
         #                             END OF YOUR CODE                             #
