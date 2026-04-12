@@ -1,30 +1,4 @@
-"""
-Stage 3 — PHRew-DP Training Script.
-
-Trains a standard Diffusion Policy image policy with Predictive Hardness
-Reweighting (PHRew).  The model and loss are UNCHANGED from the official DP;
-the only modification is the DataLoader's sampler.
-
-Weighting modes (--mode):
-  uniform   — WeightedRandomSampler with all weights = 1 (reproduces standard DP)
-  hard      — weights ∝ hardness^alpha   (max focus on hardest chunks)
-  soft_hard — weights ∝ softmax(h/T)     ← main PHRew-DP method
-  easy      — weights ∝ (1−h)^alpha      (easy-first ablation, expected to underperform)
-
-Integration strategy (same as dlos_dp/train_dlos.py):
-  - Appends official DP repo to sys.path at runtime (no repo modification)
-  - Uses MultiImageObsEncoder + ConditionalUnet1D + DDPMScheduler from official repo
-  - Trains with standard MSE diffusion loss
-
-Usage (WSL with GPU)
---------------------
-    python stage3_train_phrew.py \\
-        --mode soft_hard --seed 42 \\
-        --chunk-hardness artifacts/phrew/chunk_hardness_norm.npy \\
-        --zarr-path /home/Travor/workspaces/diffusion_policy/data/pusht/pusht_cchi_v7_replay.zarr \\
-        --dp-repo   /home/Travor/workspaces/diffusion_policy \\
-        --outdir    artifacts/phrew_runs/soft_hard_seed42
-"""
+"""用官方 Diffusion Policy 组件训练 PHRew-DP。"""
 from __future__ import annotations
 
 import argparse
@@ -36,13 +10,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
-# ---------------------------------------------------------------------------
-# Package path setup
-# ---------------------------------------------------------------------------
 _THIS_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _THIS_DIR.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -51,10 +20,6 @@ if str(_REPO_ROOT) not in sys.path:
 from pred_hardness.config import PHRConfig
 from pred_hardness.dataset import PushTImagePHRDataset
 
-
-# ------------------------------------------------------------------ #
-# Helpers                                                             #
-# ------------------------------------------------------------------ #
 
 def set_seed(seed: int) -> None:
     random.seed(seed)
@@ -69,42 +34,36 @@ def resolve_device(device: str) -> torch.device:
     return torch.device(device)
 
 
-# ------------------------------------------------------------------ #
-# Training loop                                                        #
-# ------------------------------------------------------------------ #
+def json_safe_metrics(metrics: dict) -> dict:
+    safe = {}
+    for key, value in metrics.items():
+        if isinstance(value, (int, float, np.integer, np.floating)):
+            safe[key] = float(value)
+    return safe
+
 
 def train(cfg: PHRConfig, args: argparse.Namespace) -> None:
     device = resolve_device(cfg.device)
     set_seed(cfg.seed)
 
-    outdir = Path(args.outdir)
+    outdir = Path(args.outdir).resolve()
     ckpt_dir = outdir / "checkpoints"
     outdir.mkdir(parents=True, exist_ok=True)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-    # ----------------------------------------------------------------
-    # Load official DP modules
-    # ----------------------------------------------------------------
     if str(cfg.dp_repo_path) not in sys.path:
         sys.path.insert(0, str(cfg.dp_repo_path))
 
-    try:
-        from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
-        from diffusion_policy.model.vision.multi_image_obs_encoder import MultiImageObsEncoder
-        from diffusion_policy.common.normalizer import LinearNormalizer
-        from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
-    except ImportError as e:
-        raise ImportError(
-            f"Cannot import official DP modules from '{cfg.dp_repo_path}'. "
-            f"Make sure --dp-repo points to the cloned diffusion_policy repo.\n{e}"
-        )
+    from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+    from diffusion_policy.common.normalize_util import get_image_range_normalizer
+    from diffusion_policy.common.pytorch_util import dict_apply
+    from diffusion_policy.env_runner.pusht_image_runner import PushTImageRunner
+    from diffusion_policy.model.common.normalizer import LinearNormalizer
+    from diffusion_policy.policy.diffusion_unet_hybrid_image_policy import (
+        DiffusionUnetHybridImagePolicy,
+    )
 
-    # ----------------------------------------------------------------
-    # Datasets
-    # ----------------------------------------------------------------
     print("Building datasets …")
-
-    # Load hardness scores if provided
     hardness_scores: np.ndarray | None = None
     if args.chunk_hardness and Path(args.chunk_hardness).exists():
         hardness_scores = np.load(str(args.chunk_hardness)).astype(np.float32)
@@ -112,7 +71,7 @@ def train(cfg: PHRConfig, args: argparse.Namespace) -> None:
     elif args.mode != "uniform":
         raise FileNotFoundError(
             f"--chunk-hardness file not found: {args.chunk_hardness}\n"
-            "Run stage2b_score_chunks.py first."
+            "Run pred_hardness/stage2b_score_chunks.py first."
         )
 
     train_dataset = PushTImagePHRDataset(
@@ -131,13 +90,10 @@ def train(cfg: PHRConfig, args: argparse.Namespace) -> None:
         val_ratio=cfg.val_ratio,
         split="val",
         seed=cfg.seed,
-        hardness_scores=None,   # val always uses uniform (unbiased evaluation)
+        hardness_scores=None,
     )
     print(f"  train chunks={len(train_dataset)}, val chunks={len(val_dataset)}")
 
-    # ----------------------------------------------------------------
-    # Weighted sampler
-    # ----------------------------------------------------------------
     weights = train_dataset.get_weights(
         mode=args.mode,
         temperature=args.temperature,
@@ -148,26 +104,23 @@ def train(cfg: PHRConfig, args: argparse.Namespace) -> None:
         num_samples=len(train_dataset),
         replacement=True,
     )
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=cfg.batch_size,
         sampler=sampler,
-        num_workers=4,
+        num_workers=0,
         pin_memory=True,
         drop_last=True,
-        persistent_workers=True,
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=cfg.batch_size,
         shuffle=False,
-        num_workers=2,
+        num_workers=0,
         pin_memory=True,
     )
 
-    # ----------------------------------------------------------------
-    # Build DP model (same architecture as official push-T image policy)
-    # ----------------------------------------------------------------
     noise_scheduler = DDPMScheduler(
         num_train_timesteps=cfg.num_train_timesteps,
         beta_schedule="squaredcos_cap_v2",
@@ -175,76 +128,48 @@ def train(cfg: PHRConfig, args: argparse.Namespace) -> None:
         prediction_type="epsilon",
     )
 
-    obs_encoder = MultiImageObsEncoder(
-        shape_meta={
-            "obs": {
-                "image": {
-                    "shape": [3, 96, 96],
-                    "type": "rgb",
-                }
-            }
+    shape_meta = {
+        "action": {"shape": [cfg.action_dim]},
+        "obs": {
+            "image": {"shape": [3, 96, 96], "type": "rgb"},
+            "agent_pos": {"shape": [2], "type": "low_dim"},
         },
-        rgb_model_name="resnet18",
-        resize_shape=None,
-        crop_shape=[76, 76],
-        random_crop=True,
-        use_group_norm=True,
-        share_rgb_model=False,
-        imagenet_norm=True,
-    )
-    obs_feature_dim = obs_encoder.output_shape()[0]
+    }
 
-    noise_pred_net = ConditionalUnet1D(
-        input_dim=cfg.action_dim,
-        global_cond_dim=obs_feature_dim * cfg.obs_horizon,
-        diffusion_step_embed_dim=256,
-        down_dims=[256, 512, 1024],
+    policy = DiffusionUnetHybridImagePolicy(
+        shape_meta=shape_meta,
+        noise_scheduler=noise_scheduler,
+        horizon=cfg.pred_horizon,
+        n_action_steps=cfg.action_horizon,
+        n_obs_steps=cfg.obs_horizon,
+        num_inference_steps=cfg.num_train_timesteps,
+        obs_as_global_cond=True,
+        crop_shape=(84, 84),
+        diffusion_step_embed_dim=128,
+        down_dims=(128, 256, 512),
         kernel_size=5,
         n_groups=8,
         cond_predict_scale=True,
+        obs_encoder_group_norm=True,
+        eval_fixed_crop=True,
     )
 
-    # Combine into a simple module for clean forward / parameter grouping
-    class DPModel(nn.Module):
-        def __init__(self, obs_encoder, noise_pred_net, noise_scheduler):
-            super().__init__()
-            self.obs_encoder    = obs_encoder
-            self.noise_pred_net = noise_pred_net
-            self.noise_scheduler = noise_scheduler
-            self.normalizer: LinearNormalizer | None = None
-
-        def compute_loss(self, batch: dict, device: torch.device) -> torch.Tensor:
-            nobs    = self.normalizer["obs"].normalize(batch["obs"].to(device))
-            naction = self.normalizer["action"].normalize(batch["action"].to(device))
-            B = naction.shape[0]
-            timesteps = torch.randint(
-                0, self.noise_scheduler.config.num_train_timesteps,
-                (B,), device=device, dtype=torch.long,
-            )
-            noise = torch.randn_like(naction)
-            noisy_action = self.noise_scheduler.add_noise(naction, noise, timesteps)
-            obs_feat   = self.obs_encoder(nobs)
-            noise_pred = self.noise_pred_net(
-                noisy_action, timesteps, global_cond=obs_feat
-            )
-            return F.mse_loss(noise_pred, noise)
-
-    model = DPModel(obs_encoder, noise_pred_net, noise_scheduler).to(device)
-
-    # Fit normalizer on training set
     print("Fitting normalizer …")
-    all_actions = np.stack(
-        [train_dataset[i]["action"].numpy() for i in range(len(train_dataset))]
-    )
     normalizer = LinearNormalizer()
-    normalizer.fit({"action": torch.from_numpy(all_actions)})
-    model.normalizer = normalizer
+    normalizer.fit(
+        data={
+            "action": train_dataset.actions,
+            "agent_pos": train_dataset.states[:, :2],
+        },
+        last_n_dims=1,
+        mode="limits",
+    )
+    normalizer["image"] = get_image_range_normalizer()
+    policy.set_normalizer(normalizer)
+    policy.to(device)
 
-    # ----------------------------------------------------------------
-    # Optimiser + LR schedule
-    # ----------------------------------------------------------------
     optimizer = torch.optim.AdamW(
-        [p for p in model.parameters() if p.requires_grad],
+        policy.parameters(),
         lr=cfg.lr,
         weight_decay=1e-6,
     )
@@ -252,134 +177,173 @@ def train(cfg: PHRConfig, args: argparse.Namespace) -> None:
         optimizer, T_max=cfg.epochs
     )
 
-    # ----------------------------------------------------------------
-    # Optional resume from checkpoint
-    # ----------------------------------------------------------------
-    start_epoch = 0
-    if args.checkpoint and Path(args.checkpoint).exists():
-        ckpt = torch.load(args.checkpoint, map_location=device)
-        model.load_state_dict(ckpt["model_state_dict"])
-        optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-        start_epoch = ckpt.get("epoch", 0) + 1
-        print(f"Resumed from epoch {start_epoch - 1}")
+    env_runner = PushTImageRunner(
+        output_dir=str(outdir),
+        n_train=args.n_train,
+        n_train_vis=args.n_train_vis,
+        n_test=args.n_test,
+        n_test_vis=args.n_test_vis,
+        n_envs=args.n_envs,
+        n_obs_steps=cfg.obs_horizon,
+        n_action_steps=cfg.action_horizon,
+        max_steps=args.max_steps,
+        legacy_test=True,
+        tqdm_interval_sec=1.0,
+    )
 
-    # ----------------------------------------------------------------
-    # Training loop
-    # ----------------------------------------------------------------
-    history: list[dict] = []
+    start_epoch = 0
+    best_metric = -float("inf")
     best_val_loss = float("inf")
     best_path = outdir / "best.pt"
 
-    print(f"Training for {cfg.epochs} epochs (mode={args.mode}, seed={cfg.seed}) …")
-    for epoch in range(start_epoch, cfg.epochs):
-        # -- train --
-        model.train()
-        train_sum, train_cnt = 0.0, 0
-        for batch in train_loader:
-            optimizer.zero_grad(set_to_none=True)
-            loss = model.compute_loss(batch, device)
-            loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
-            optimizer.step()
-            bs = batch["action"].shape[0]
-            train_sum += float(loss.item()) * bs
-            train_cnt += bs
-        lr_scheduler.step()
-        train_loss = train_sum / max(train_cnt, 1)
+    if args.checkpoint and Path(args.checkpoint).exists():
+        ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
+        policy.load_state_dict(ckpt["model_state_dict"])
+        optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+        start_epoch = int(ckpt.get("epoch", 0)) + 1
+        best_metric = float(ckpt.get("best_metric", best_metric))
+        best_val_loss = float(ckpt.get("best_val_loss", best_val_loss))
+        print(f"Resumed from epoch {start_epoch - 1}")
 
-        # -- val --
-        model.eval()
-        val_sum, val_cnt = 0.0, 0
-        with torch.no_grad():
-            for batch in val_loader:
-                loss = model.compute_loss(batch, device)
+    history: list[dict] = []
+    log_path = outdir / "logs.json.txt"
+
+    print(
+        f"Training PHRew-DP for {cfg.epochs} epochs "
+        f"(mode={args.mode}, seed={cfg.seed}, device={device}) …"
+    )
+    with log_path.open("w", encoding="utf-8") as f:
+        for epoch in range(start_epoch, cfg.epochs):
+            policy.train()
+            train_sum, train_cnt = 0.0, 0
+            for batch in train_loader:
+                batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
+                optimizer.zero_grad(set_to_none=True)
+                loss = policy.compute_loss(batch)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=10.0)
+                optimizer.step()
                 bs = batch["action"].shape[0]
-                val_sum += float(loss.item()) * bs
-                val_cnt += bs
-        val_loss = val_sum / max(val_cnt, 1)
+                train_sum += float(loss.item()) * bs
+                train_cnt += bs
+            lr_scheduler.step()
+            train_loss = train_sum / max(train_cnt, 1)
 
-        history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss})
-        print(f"epoch={epoch:04d}  train={train_loss:.6f}  val={val_loss:.6f}")
+            policy.eval()
+            val_sum, val_cnt = 0.0, 0
+            with torch.no_grad():
+                for batch in val_loader:
+                    batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
+                    loss = policy.compute_loss(batch)
+                    bs = batch["action"].shape[0]
+                    val_sum += float(loss.item()) * bs
+                    val_cnt += bs
+            val_loss = val_sum / max(val_cnt, 1)
 
-        # Best checkpoint
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            torch.save(
-                {
-                    "epoch":            epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "val_loss":         val_loss,
-                    "mode":             args.mode,
-                    "seed":             cfg.seed,
-                },
-                best_path,
+            row = {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "val_loss": val_loss,
+                "lr": lr_scheduler.get_last_lr()[0],
+                "mode": args.mode,
+                "seed": cfg.seed,
+            }
+
+            if (epoch % args.eval_every) == 0:
+                rollout_log = json_safe_metrics(env_runner.run(policy))
+                row.update(rollout_log)
+
+            history.append(row)
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.flush()
+            print(
+                f"epoch={epoch:04d} "
+                f"train={train_loss:.6f} val={val_loss:.6f} "
+                f"test={row.get('test/mean_score', float('nan')):.6f}"
             )
 
-        # Periodic checkpoint every 100 epochs
-        if (epoch + 1) % 100 == 0:
-            torch.save(
-                {
-                    "epoch":            epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "val_loss":         val_loss,
-                },
-                ckpt_dir / f"epoch_{epoch:04d}.pt",
-            )
+            metric = float(row.get("test/mean_score", -val_loss))
+            if metric > best_metric:
+                best_metric = metric
+                best_val_loss = min(best_val_loss, val_loss)
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "model_state_dict": policy.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "best_metric": best_metric,
+                        "best_val_loss": best_val_loss,
+                        "mode": args.mode,
+                        "seed": cfg.seed,
+                    },
+                    best_path,
+                )
 
-    # ----------------------------------------------------------------
-    # Save history + config snapshot
-    # ----------------------------------------------------------------
+            if (epoch + 1) % 10 == 0:
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "model_state_dict": policy.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "best_metric": best_metric,
+                        "best_val_loss": best_val_loss,
+                        "mode": args.mode,
+                        "seed": cfg.seed,
+                    },
+                    ckpt_dir / f"epoch_{epoch:04d}.pt",
+                )
+
     pd.DataFrame(history).to_csv(outdir / "training_history.csv", index=False)
-
-    config_snap = {
-        "mode":            args.mode,
-        "temperature":     args.temperature,
-        "alpha":           args.alpha,
-        "seed":            cfg.seed,
-        "epochs":          cfg.epochs,
-        "batch_size":      cfg.batch_size,
-        "lr":              cfg.lr,
-        "best_val_loss":   best_val_loss,
-        "chunk_hardness":  str(args.chunk_hardness),
-        "zarr_path":       str(cfg.zarr_path),
-    }
     (outdir / "config.json").write_text(
-        json.dumps(config_snap, indent=2, ensure_ascii=False), encoding="utf-8"
+        json.dumps(
+            {
+                "mode": args.mode,
+                "temperature": args.temperature,
+                "alpha": args.alpha,
+                "seed": cfg.seed,
+                "epochs": cfg.epochs,
+                "batch_size": cfg.batch_size,
+                "lr": cfg.lr,
+                "eval_every": args.eval_every,
+                "best_metric": best_metric,
+                "best_val_loss": best_val_loss,
+                "chunk_hardness": str(args.chunk_hardness),
+                "zarr_path": str(cfg.zarr_path),
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
     )
 
-    print(f"\nbest_val_loss = {best_val_loss:.6f}")
+    print(f"\nbest_metric   = {best_metric:.6f}")
+    print(f"best_val_loss = {best_val_loss:.6f}")
     print(f"saved best checkpoint → {best_path}")
     print(f"saved history         → {outdir / 'training_history.csv'}")
 
-
-# ------------------------------------------------------------------ #
-# CLI                                                                  #
-# ------------------------------------------------------------------ #
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="PHRew-DP Stage 3: train DP with predictive hardness reweighting."
     )
-    parser.add_argument("--mode", type=str, default="soft_hard",
-                        choices=["uniform", "hard", "soft_hard", "easy"],
-                        help="Sampling weighting mode.")
-    parser.add_argument("--temperature", type=float, default=0.1,
-                        help="Softmax temperature for soft_hard mode.")
-    parser.add_argument("--alpha",       type=float, default=1.0,
-                        help="Power exponent for hard/easy modes.")
-    parser.add_argument("--seed",        type=int,   default=42)
-    parser.add_argument("--epochs",      type=int,   default=3000)
-    parser.add_argument("--batch-size",  type=int,   default=64)
-    parser.add_argument("--lr",          type=float, default=1e-4)
-    parser.add_argument("--device",      type=str,   default="auto")
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="soft_hard",
+        choices=["uniform", "hard", "soft_hard", "easy"],
+        help="Sampling weighting mode.",
+    )
+    parser.add_argument("--temperature", type=float, default=0.1)
+    parser.add_argument("--alpha", type=float, default=1.0)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--device", type=str, default="auto")
     parser.add_argument(
         "--chunk-hardness",
         type=str,
-        default="/mnt/d/Code/Learning/EI/EI-learning-notes/Diffusion_Policy/"
-                "artifacts/phrew/chunk_hardness_norm.npy",
-        help="Path to chunk_hardness_norm.npy from Stage 2b.",
+        default="/mnt/d/Code/Learning/EI/EI-learning-notes/Diffusion_Policy/artifacts/phrew/chunk_hardness_norm.npy",
     )
     parser.add_argument(
         "--zarr-path",
@@ -394,11 +358,17 @@ def main() -> None:
     parser.add_argument(
         "--outdir",
         type=str,
-        default="artifacts/phrew_runs/soft_hard_seed42",
+        default="/mnt/d/Code/Learning/EI/EI-learning-notes/Diffusion_Policy/artifacts/phrew_runs/soft_hard_seed42",
     )
-    parser.add_argument("--checkpoint", type=str, default="",
-                        help="Resume from checkpoint.")
-    parser.add_argument("--val-ratio",  type=float, default=0.1)
+    parser.add_argument("--checkpoint", type=str, default="")
+    parser.add_argument("--val-ratio", type=float, default=0.1)
+    parser.add_argument("--eval-every", type=int, default=10)
+    parser.add_argument("--n-train", type=int, default=2)
+    parser.add_argument("--n-train-vis", type=int, default=1)
+    parser.add_argument("--n-test", type=int, default=10)
+    parser.add_argument("--n-test-vis", type=int, default=1)
+    parser.add_argument("--n-envs", type=int, default=2)
+    parser.add_argument("--max-steps", type=int, default=300)
     args = parser.parse_args()
 
     cfg = PHRConfig(

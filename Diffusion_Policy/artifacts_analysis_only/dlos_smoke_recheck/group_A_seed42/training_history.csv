@@ -1,0 +1,2 @@
+epoch,train_loss,val_loss,lr,group,seed,train/sim_max_reward_0,test/sim_max_reward_10000,train/mean_score,test/mean_score
+0,0.9492446184158325,5.118597030639648,0.0,A,42,0.19029749660605202,0.0,0.19029749660605202,0.0

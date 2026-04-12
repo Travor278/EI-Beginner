@@ -1,0 +1,13 @@
+{
+  "group": "A",
+  "seed": 42,
+  "epochs": 1,
+  "batch_size": 2,
+  "lr": 0.0001,
+  "lambda_wm": 0.1,
+  "best_metric": 0.0,
+  "best_val_loss": 1.1659784317016602,
+  "zarr_path": "/home/Travor/workspaces/diffusion_policy/data/pusht/pusht_cchi_v7_replay.zarr",
+  "dp_repo_path": "/home/Travor/workspaces/diffusion_policy",
+  "max_train_episodes": 90
+}

@@ -1,34 +1,4 @@
-"""
-DLOS-DP Stage 1 Training Script.
-
-Trains a Diffusion Policy augmented with Denoising-Level Outcome Supervision
-(DLOS).  Five ablation groups (A–E) are supported via the ``--group`` flag.
-
-Integration strategy
---------------------
-The official Diffusion Policy repository is NOT modified.  Instead, we:
-  1. Append the DP repo to sys.path at runtime.
-  2. Subclass DiffusionUnetHybridImagePolicy, overriding compute_loss().
-  3. Replace the official dataset with PushTImageDLOSDataset (adds obs_next).
-  4. Load the official hydra config for Push-T image policy and patch only the
-     policy class and dataset.
-
-Usage (from WSL, with GPU)
---------------------------
-    cd /path/to/EI-Beginner/Diffusion_Policy/dlos_dp
-    python train_dlos.py \\
-        --group D --seed 42 \\
-        --zarr-path /home/Travor/workspaces/diffusion_policy/data/pusht/pusht_cchi_v7_replay.zarr \\
-        --dp-repo   /home/Travor/workspaces/diffusion_policy \\
-        --outdir    artifacts/dlos_runs/group_D_seed42
-
-Outputs
--------
-    <outdir>/checkpoints/     — epoch checkpoints (every 100 epochs)
-    <outdir>/best.pt          — best validation-loss checkpoint
-    <outdir>/training_history.csv
-    <outdir>/config.json      — full config snapshot
-"""
+"""Stage 1 training entrypoint for DLOS-DP."""
 from __future__ import annotations
 
 import argparse
@@ -44,9 +14,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-# ---------------------------------------------------------------------------
-# Resolve package imports whether run as a script or as a module
-# ---------------------------------------------------------------------------
 _THIS_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _THIS_DIR.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -55,13 +22,8 @@ if str(_REPO_ROOT) not in sys.path:
 from dlos_dp.config import DLOSConfig
 from dlos_dp.dataset import PushTImageDLOSDataset
 from dlos_dp.dino_encoder import FrozenDINOv2Encoder
-from dlos_dp.dlos_loss import DLOSLoss
-from dlos_dp.world_model import OutcomeWorldModel
+from dlos_dp.dlos_loss import DLOSLoss, compute_x0_hat
 
-
-# ------------------------------------------------------------------ #
-# Helpers                                                             #
-# ------------------------------------------------------------------ #
 
 def set_seed(seed: int) -> None:
     random.seed(seed)
@@ -76,413 +38,411 @@ def resolve_device(device: str) -> torch.device:
     return torch.device(device)
 
 
-# ------------------------------------------------------------------ #
-# DLOS-augmented policy (subclasses official DP)                      #
-# ------------------------------------------------------------------ #
+def json_safe_metrics(metrics: dict) -> dict:
+    safe = {}
+    for key, value in metrics.items():
+        if isinstance(value, (int, float, np.integer, np.floating)):
+            safe[key] = float(value)
+    return safe
 
-def build_dlos_policy(
-    cfg: DLOSConfig,
-    device: torch.device,
-    dp_policy_cls,          # DiffusionUnetHybridImagePolicy class, loaded at runtime
-    dp_policy_kwargs: dict, # kwargs to pass to the base policy constructor
-) -> nn.Module:
-    """
-    Construct a DLOSPolicy by dynamically subclassing the official DP policy.
-    """
-    dino = FrozenDINOv2Encoder(
-        model_name=cfg.dino_model,
-        img_size=cfg.dino_img_size,
-    ).to(device)
 
-    wm = OutcomeWorldModel(
-        obs_dim=cfg.obs_dim,
-        action_dim=cfg.action_dim,
-        hidden_dim=cfg.wm_hidden,
-    ).to(device)
-
-    dlos_loss_fn = DLOSLoss(wm=wm)
-
-    # ----------------------------------------------------------------
-    # Dynamically define DLOSPolicy to avoid a hard import of the
-    # official DP at module load time.
-    # ----------------------------------------------------------------
-    class DLOSPolicy(dp_policy_cls):
-        """
-        DiffusionUnetHybridImagePolicy with DLOS loss injected into
-        compute_loss().
-        """
-
-        def __init__(self, *args, _dlos_cfg, _dino, _wm, _dlos_loss_fn, **kwargs):
+def build_policy_class(base_policy_cls):
+    class DLOSPolicy(base_policy_cls):
+        def __init__(self, *args, _dlos_cfg: DLOSConfig, **kwargs):
             super().__init__(*args, **kwargs)
-            self.dlos_cfg     = _dlos_cfg
-            self.dino         = _dino
-            self.wm           = _wm
-            self.dlos_loss_fn = _dlos_loss_fn
+            self.dlos_cfg = _dlos_cfg
+            self.dino = FrozenDINOv2Encoder(
+                model_name=_dlos_cfg.dino_model,
+                img_size=_dlos_cfg.dino_img_size,
+            )
+            from dlos_dp.world_model import OutcomeWorldModel
+
+            self.wm = OutcomeWorldModel(
+                obs_dim=_dlos_cfg.obs_dim,
+                action_dim=_dlos_cfg.action_dim,
+                hidden_dim=_dlos_cfg.wm_hidden,
+            )
+            self.dlos_loss_fn = DLOSLoss(self.wm)
 
         def compute_loss(self, batch: dict) -> torch.Tensor:
-            # --------------------------------------------------------
-            # Standard Diffusion Policy forward pass
-            # --------------------------------------------------------
-            # nobs: (B, obs_horizon, C, H, W) — DP-normalised observation
-            nobs    = self.normalizer["obs"].normalize(batch["obs"])
-            # naction: (B, pred_horizon, 2) — DP-normalised action
-            naction = self.normalizer["action"].normalize(batch["action"])
-            obs_next = batch["obs_next"]    # (B, 3, H, W) — raw float [0,1]
+            assert "valid_mask" not in batch
 
-            B = naction.shape[0]
-            device = naction.device
+            nobs = self.normalizer.normalize(batch["obs"])
+            nactions = self.normalizer["action"].normalize(batch["action"])
+            batch_size = nactions.shape[0]
+            horizon = nactions.shape[1]
 
+            local_cond = None
+            global_cond = None
+            trajectory = nactions
+            cond_data = trajectory
+
+            if self.obs_as_global_cond:
+                from diffusion_policy.common.pytorch_util import dict_apply
+
+                this_nobs = dict_apply(
+                    nobs,
+                    lambda x: x[:, : self.n_obs_steps, ...].reshape(-1, *x.shape[2:]),
+                )
+                nobs_features = self.obs_encoder(this_nobs)
+                global_cond = nobs_features.reshape(batch_size, -1)
+            else:
+                from diffusion_policy.common.pytorch_util import dict_apply
+
+                this_nobs = dict_apply(
+                    nobs,
+                    lambda x: x.reshape(-1, *x.shape[2:]),
+                )
+                nobs_features = self.obs_encoder(this_nobs)
+                nobs_features = nobs_features.reshape(batch_size, horizon, -1)
+                cond_data = torch.cat([nactions, nobs_features], dim=-1)
+                trajectory = cond_data.detach()
+
+            condition_mask = self.mask_generator(trajectory.shape)
+            noise = torch.randn(trajectory.shape, device=trajectory.device)
             timesteps = torch.randint(
                 0,
                 self.noise_scheduler.config.num_train_timesteps,
-                (B,),
-                device=device,
-                dtype=torch.long,
-            )
-            noise = torch.randn_like(naction)
-            noisy_action = self.noise_scheduler.add_noise(naction, noise, timesteps)
+                (batch_size,),
+                device=trajectory.device,
+            ).long()
+            noisy_trajectory = self.noise_scheduler.add_noise(trajectory, noise, timesteps)
+            loss_mask = ~condition_mask
+            noisy_trajectory[condition_mask] = cond_data[condition_mask]
 
-            # Encode observations with official obs encoder
-            obs_feat   = self.obs_encoder(nobs)
-            noise_pred = self.noise_pred_net(
-                noisy_action, timesteps, global_cond=obs_feat
+            pred = self.model(
+                noisy_trajectory,
+                timesteps,
+                local_cond=local_cond,
+                global_cond=global_cond,
             )
-            loss_diff = F.mse_loss(noise_pred, noise)
+
+            pred_type = self.noise_scheduler.config.prediction_type
+            if pred_type == "epsilon":
+                target = noise
+            elif pred_type == "sample":
+                target = trajectory
+            else:
+                raise ValueError(f"Unsupported prediction type {pred_type}")
+
+            loss_diff = F.mse_loss(pred, target, reduction="none")
+            loss_diff = loss_diff * loss_mask.type(loss_diff.dtype)
+            loss_diff = loss_diff.reshape(batch_size, -1).mean(dim=1).mean()
 
             if self.dlos_cfg.group == "A":
                 return loss_diff
 
-            # --------------------------------------------------------
-            # DLOS world-model loss
-            # --------------------------------------------------------
-            # Use the raw (non-DP-normalised) last frame for DINO.
-            # batch['obs'] is float [0,1], shape (B, obs_horizon, 3, H, W).
-            obs_t  = batch["obs"][:, -1]           # (B, 3, H, W)
-            z_obs  = self.dino(obs_t.to(device))   # (B, 384)  — no_grad inside dino
-            z_next = self.dino(obs_next.to(device)) # (B, 384)
+            device = trajectory.device
+            with torch.no_grad():
+                obs_t = batch["obs"]["image"][:, self.n_obs_steps - 1].to(device)
+                obs_next = batch["obs_next_image"].to(device)
+                z_obs = self.dino(obs_t)
+                z_next = self.dino(obs_next)
 
             alphas_cumprod = self.noise_scheduler.alphas_cumprod.to(device)
+            final_x0 = None
+            if self.dlos_cfg.group == "C":
+                with torch.no_grad():
+                    zero_timesteps = torch.zeros(
+                        batch_size,
+                        device=device,
+                        dtype=torch.long,
+                    )
+                    final_pred = self.model(
+                        trajectory,
+                        zero_timesteps,
+                        local_cond=local_cond,
+                        global_cond=global_cond,
+                    )
+                    final_x0 = compute_x0_hat(
+                        noisy_action=trajectory,
+                        noise_pred=final_pred,
+                        timesteps=zero_timesteps,
+                        alphas_cumprod=alphas_cumprod,
+                    )
 
             loss_wm = self.dlos_loss_fn(
-                noise_pred=noise_pred,
-                noisy_action=noisy_action,
+                noise_pred=pred,
+                noisy_action=noisy_trajectory,
                 timesteps=timesteps,
-                gt_action=naction,
+                gt_action=nactions,
                 z_obs=z_obs,
                 z_next=z_next,
                 alphas_cumprod=alphas_cumprod,
                 group=self.dlos_cfg.group,
+                final_x0=final_x0,
             )
-
             return loss_diff + self.dlos_cfg.lambda_wm * loss_wm
 
-    # Instantiate and return
-    policy = DLOSPolicy(
-        **dp_policy_kwargs,
-        _dlos_cfg=cfg,
-        _dino=dino,
-        _wm=wm,
-        _dlos_loss_fn=dlos_loss_fn,
-    ).to(device)
-    return policy
+    return DLOSPolicy
 
-
-# ------------------------------------------------------------------ #
-# Training loop                                                        #
-# ------------------------------------------------------------------ #
 
 def train(cfg: DLOSConfig, args: argparse.Namespace) -> None:
     device = resolve_device(cfg.device)
     set_seed(cfg.seed)
 
-    outdir = Path(args.outdir)
+    outdir = Path(args.outdir).resolve()
     ckpt_dir = outdir / "checkpoints"
     outdir.mkdir(parents=True, exist_ok=True)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-    # ----------------------------------------------------------------
-    # Load official DP policy class and default kwargs
-    # ----------------------------------------------------------------
     if str(cfg.dp_repo_path) not in sys.path:
         sys.path.insert(0, str(cfg.dp_repo_path))
 
-    try:
-        from diffusion_policy.policy.diffusion_unet_hybrid_image_policy import (
-            DiffusionUnetHybridImagePolicy,
-        )
-        from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
-        from diffusion_policy.model.vision.multi_image_obs_encoder import MultiImageObsEncoder
-        from diffusion_policy.common.normalizer import LinearNormalizer
-        from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
-    except ImportError as e:
-        raise ImportError(
-            f"Failed to import official Diffusion Policy modules from "
-            f"'{cfg.dp_repo_path}'.  Make sure dp_repo_path points to the "
-            f"cloned diffusion_policy repository.\nOriginal error: {e}"
-        )
+    from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+    from diffusion_policy.common.pytorch_util import dict_apply
+    from diffusion_policy.env_runner.pusht_image_runner import PushTImageRunner
+    from diffusion_policy.policy.diffusion_unet_hybrid_image_policy import (
+        DiffusionUnetHybridImagePolicy,
+    )
 
-    # ----------------------------------------------------------------
-    # Datasets & DataLoaders
-    # ----------------------------------------------------------------
     print("Building datasets …")
     train_dataset = PushTImageDLOSDataset(
         zarr_path=cfg.zarr_path,
         obs_horizon=cfg.obs_horizon,
         pred_horizon=cfg.pred_horizon,
+        action_horizon=cfg.action_horizon,
+        pad_before=cfg.pad_before,
+        pad_after=cfg.pad_after,
         val_ratio=cfg.val_ratio,
+        max_train_episodes=cfg.max_train_episodes,
         split="train",
         seed=cfg.seed,
     )
-    val_dataset = PushTImageDLOSDataset(
-        zarr_path=cfg.zarr_path,
-        obs_horizon=cfg.obs_horizon,
-        pred_horizon=cfg.pred_horizon,
-        val_ratio=cfg.val_ratio,
-        split="val",
-        seed=cfg.seed,
-    )
+    val_dataset = train_dataset.get_validation_dataset()
     print(f"  train={len(train_dataset)}, val={len(val_dataset)}")
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=cfg.batch_size,
         shuffle=True,
-        num_workers=4,
+        num_workers=args.num_workers,
         pin_memory=True,
         drop_last=True,
-        persistent_workers=True,
+        persistent_workers=args.num_workers > 0,
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=cfg.batch_size,
         shuffle=False,
-        num_workers=2,
+        num_workers=args.num_workers,
         pin_memory=True,
+        persistent_workers=args.num_workers > 0,
     )
 
-    # ----------------------------------------------------------------
-    # Build the DLOS policy
-    # ----------------------------------------------------------------
-    # Push-T image policy hyper-parameters (mirror official config)
     noise_scheduler = DDPMScheduler(
         num_train_timesteps=cfg.num_train_timesteps,
         beta_schedule="squaredcos_cap_v2",
         clip_sample=True,
         prediction_type="epsilon",
     )
-
-    # obs_encoder: MultiImageObsEncoder with ResNet18 (official default)
-    # We construct a minimal kwargs dict compatible with the official policy.
-    # For a full hydra-based initialisation, pass --dp-cfg-override.
-    obs_encoder = MultiImageObsEncoder(
-        shape_meta={
-            "obs": {
-                "image": {
-                    "shape": [3, 96, 96],
-                    "type": "rgb",
-                }
-            }
+    shape_meta = {
+        "action": {"shape": [cfg.action_dim]},
+        "obs": {
+            "image": {"shape": [3, 96, 96], "type": "rgb"},
+            "agent_pos": {"shape": [2], "type": "low_dim"},
         },
-        rgb_model_name="resnet18",
-        resize_shape=None,
-        crop_shape=[76, 76],
-        random_crop=True,
-        use_group_norm=True,
-        share_rgb_model=False,
-        imagenet_norm=True,
-    )
+    }
 
-    obs_feature_dim = obs_encoder.output_shape()[0]
-
-    noise_pred_net = ConditionalUnet1D(
-        input_dim=cfg.action_dim,
-        global_cond_dim=obs_feature_dim * cfg.obs_horizon,
-        diffusion_step_embed_dim=256,
-        down_dims=[256, 512, 1024],
-        kernel_size=5,
-        n_groups=8,
-        cond_predict_scale=True,
-    )
-
-    dp_policy_kwargs = dict(
-        shape_meta={
-            "obs": {
-                "image": {
-                    "shape": [3, 96, 96],
-                    "type": "rgb",
-                }
-            },
-            "action": {
-                "shape": [cfg.action_dim],
-            },
-        },
+    DLOSPolicy = build_policy_class(DiffusionUnetHybridImagePolicy)
+    policy = DLOSPolicy(
+        shape_meta=shape_meta,
         noise_scheduler=noise_scheduler,
-        obs_encoder=obs_encoder,
-        noise_pred_net=noise_pred_net,
         horizon=cfg.pred_horizon,
         n_action_steps=cfg.action_horizon,
         n_obs_steps=cfg.obs_horizon,
-        num_inference_steps=None,
+        num_inference_steps=cfg.num_inference_steps,
         obs_as_global_cond=True,
-        crop_shape=[76, 76],
-        diffusion_step_embed_dim=256,
-        down_dims=[256, 512, 1024],
-        kernel_size=5,
-        n_groups=8,
-        cond_predict_scale=True,
+        crop_shape=cfg.crop_shape,
+        diffusion_step_embed_dim=cfg.diffusion_step_embed_dim,
+        down_dims=cfg.down_dims,
+        kernel_size=cfg.kernel_size,
+        n_groups=cfg.n_groups,
+        cond_predict_scale=cfg.cond_predict_scale,
+        obs_encoder_group_norm=cfg.obs_encoder_group_norm,
+        eval_fixed_crop=cfg.eval_fixed_crop,
+        _dlos_cfg=cfg,
     )
 
-    print(f"Building DLOSPolicy (group={cfg.group}) …")
-    policy = build_dlos_policy(cfg, device, DiffusionUnetHybridImagePolicy, dp_policy_kwargs)
-
-    # Fit normalizer on training data statistics
     print("Fitting normalizer …")
-    all_actions = np.stack(
-        [train_dataset[i]["action"].numpy() for i in range(len(train_dataset))]
-    )
-    normalizer = LinearNormalizer()
-    normalizer.fit({"action": torch.from_numpy(all_actions)})
+    normalizer = train_dataset.get_normalizer(mode="limits")
     policy.set_normalizer(normalizer)
+    policy.to(device)
 
-    # ----------------------------------------------------------------
-    # Optimisers
-    # ----------------------------------------------------------------
-    # Separate learning rates: WM trains faster; DINO is frozen.
-    dp_params  = [p for n, p in policy.named_parameters()
-                  if not n.startswith("dino.") and not n.startswith("wm.")]
-    wm_params  = list(policy.wm.parameters())
-
+    dp_params = [
+        p for name, p in policy.named_parameters()
+        if not name.startswith("dino.") and not name.startswith("wm.")
+    ]
+    wm_params = list(policy.wm.parameters())
     optimizer = torch.optim.AdamW(
         [
             {"params": dp_params, "lr": cfg.lr},
-            {"params": wm_params, "lr": cfg.lr * 10},  # WM trains faster
+            {"params": wm_params, "lr": cfg.lr * 10.0},
         ],
         weight_decay=1e-6,
     )
-
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=cfg.epochs
+        optimizer,
+        T_max=cfg.epochs,
     )
 
-    # ----------------------------------------------------------------
-    # Optionally resume from checkpoint
-    # ----------------------------------------------------------------
+    env_runner = PushTImageRunner(
+        output_dir=str(outdir),
+        n_train=args.n_train,
+        n_train_vis=args.n_train_vis,
+        n_test=args.n_test,
+        n_test_vis=args.n_test_vis,
+        n_envs=args.n_envs,
+        n_obs_steps=cfg.obs_horizon,
+        n_action_steps=cfg.action_horizon,
+        max_steps=args.max_steps,
+        legacy_test=True,
+        tqdm_interval_sec=1.0,
+        shared_memory=False,
+    )
+
     start_epoch = 0
-    if cfg.checkpoint_path:
-        ckpt = torch.load(cfg.checkpoint_path, map_location=device)
+    best_metric = -float("inf")
+    best_val_loss = float("inf")
+    best_path = outdir / "best.pt"
+    if args.checkpoint and Path(args.checkpoint).exists():
+        ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
         policy.load_state_dict(ckpt["model_state_dict"])
         optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-        start_epoch = ckpt.get("epoch", 0) + 1
-        print(f"Resumed from checkpoint at epoch {start_epoch - 1}")
+        start_epoch = int(ckpt.get("epoch", 0)) + 1
+        best_metric = float(ckpt.get("best_metric", best_metric))
+        best_val_loss = float(ckpt.get("best_val_loss", best_val_loss))
+        print(f"Resumed from epoch {start_epoch - 1}")
 
-    # ----------------------------------------------------------------
-    # Training loop
-    # ----------------------------------------------------------------
     history: list[dict] = []
-    best_val_loss = float("inf")
-    best_ckpt_path = outdir / "best.pt"
-
-    print(f"Starting training for {cfg.epochs} epochs …")
-    for epoch in range(start_epoch, cfg.epochs):
-        # -- train --
-        policy.train()
-        train_loss_sum, train_count = 0.0, 0
-        for batch in train_loader:
-            batch = {k: v.to(device) for k, v in batch.items()}
-            optimizer.zero_grad(set_to_none=True)
-            loss = policy.compute_loss(batch)
-            loss.backward()
-            nn.utils.clip_grad_norm_(policy.parameters(), max_norm=10.0)
-            optimizer.step()
-            bs = batch["action"].shape[0]
-            train_loss_sum += float(loss.item()) * bs
-            train_count += bs
-
-        lr_scheduler.step()
-        train_loss = train_loss_sum / max(train_count, 1)
-
-        # -- val --
-        policy.eval()
-        val_loss_sum, val_count = 0.0, 0
-        with torch.no_grad():
-            for batch in val_loader:
-                batch = {k: v.to(device) for k, v in batch.items()}
+    log_path = outdir / "logs.json.txt"
+    print(
+        f"Training DLOS-DP for {cfg.epochs} epochs "
+        f"(group={cfg.group}, seed={cfg.seed}, device={device}) …"
+    )
+    with log_path.open("w", encoding="utf-8") as f:
+        for epoch in range(start_epoch, cfg.epochs):
+            policy.train()
+            train_sum, train_cnt = 0.0, 0
+            for batch_idx, batch in enumerate(train_loader):
+                if args.max_train_batches is not None and batch_idx >= args.max_train_batches:
+                    break
+                batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
+                optimizer.zero_grad(set_to_none=True)
                 loss = policy.compute_loss(batch)
+                loss.backward()
+                nn.utils.clip_grad_norm_(policy.parameters(), max_norm=10.0)
+                optimizer.step()
+
                 bs = batch["action"].shape[0]
-                val_loss_sum += float(loss.item()) * bs
-                val_count += bs
-        val_loss = val_loss_sum / max(val_count, 1)
+                train_sum += float(loss.item()) * bs
+                train_cnt += bs
 
-        history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss})
-        print(
-            f"epoch={epoch:04d}  train_loss={train_loss:.6f}  val_loss={val_loss:.6f}"
-        )
+            lr_scheduler.step()
+            train_loss = train_sum / max(train_cnt, 1)
 
-        # -- best checkpoint --
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "model_state_dict": policy.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "val_loss": val_loss,
-                    "group": cfg.group,
-                    "seed": cfg.seed,
-                },
-                best_ckpt_path,
+            policy.eval()
+            val_sum, val_cnt = 0.0, 0
+            with torch.no_grad():
+                for batch_idx, batch in enumerate(val_loader):
+                    if args.max_val_batches is not None and batch_idx >= args.max_val_batches:
+                        break
+                    batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
+                    loss = policy.compute_loss(batch)
+                    bs = batch["action"].shape[0]
+                    val_sum += float(loss.item()) * bs
+                    val_cnt += bs
+            val_loss = val_sum / max(val_cnt, 1)
+
+            row = {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "val_loss": val_loss,
+                "lr": lr_scheduler.get_last_lr()[0],
+                "group": cfg.group,
+                "seed": cfg.seed,
+            }
+            if (epoch % args.eval_every) == 0:
+                rollout_log = json_safe_metrics(env_runner.run(policy))
+                row.update(rollout_log)
+
+            history.append(row)
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.flush()
+            print(
+                f"epoch={epoch:04d} train={train_loss:.6f} "
+                f"val={val_loss:.6f} "
+                f"test={row.get('test/mean_score', float('nan')):.6f}"
             )
 
-        # -- periodic checkpoint --
-        if (epoch + 1) % 100 == 0:
-            periodic_path = ckpt_dir / f"epoch_{epoch:04d}.pt"
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "model_state_dict": policy.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "val_loss": val_loss,
-                },
-                periodic_path,
-            )
+            metric = float(row.get("test/mean_score", -val_loss))
+            if metric > best_metric:
+                best_metric = metric
+                best_val_loss = min(best_val_loss, val_loss)
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "model_state_dict": policy.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "best_metric": best_metric,
+                        "best_val_loss": best_val_loss,
+                        "group": cfg.group,
+                        "seed": cfg.seed,
+                    },
+                    best_path,
+                )
 
-    # ----------------------------------------------------------------
-    # Save history + config
-    # ----------------------------------------------------------------
-    history_path = outdir / "training_history.csv"
-    pd.DataFrame(history).to_csv(history_path, index=False)
+            if (epoch + 1) % 10 == 0:
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "model_state_dict": policy.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "best_metric": best_metric,
+                        "best_val_loss": best_val_loss,
+                        "group": cfg.group,
+                        "seed": cfg.seed,
+                    },
+                    ckpt_dir / f"epoch_{epoch:04d}.pt",
+                )
 
-    config_snapshot = {
-        k: v for k, v in vars(cfg).items()
-    }
-    config_snapshot["best_val_loss"] = best_val_loss
+    pd.DataFrame(history).to_csv(outdir / "training_history.csv", index=False)
     (outdir / "config.json").write_text(
-        json.dumps(config_snapshot, indent=2, ensure_ascii=False), encoding="utf-8"
+        json.dumps(
+            {
+                "group": cfg.group,
+                "seed": cfg.seed,
+                "epochs": cfg.epochs,
+                "batch_size": cfg.batch_size,
+                "lr": cfg.lr,
+                "lambda_wm": cfg.lambda_wm,
+                "best_metric": best_metric,
+                "best_val_loss": best_val_loss,
+                "zarr_path": str(cfg.zarr_path),
+                "dp_repo_path": str(cfg.dp_repo_path),
+                "max_train_episodes": cfg.max_train_episodes,
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
     )
 
-    print(f"\nbest_val_loss={best_val_loss:.6f}")
-    print(f"saved best checkpoint → {best_ckpt_path}")
-    print(f"saved history         → {history_path}")
+    print(f"\nbest_metric   = {best_metric:.6f}")
+    print(f"best_val_loss = {best_val_loss:.6f}")
+    print(f"saved best checkpoint -> {best_path}")
+    print(f"saved history         -> {outdir / 'training_history.csv'}")
 
-
-# ------------------------------------------------------------------ #
-# CLI                                                                  #
-# ------------------------------------------------------------------ #
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="DLOS-DP Stage 1 training (groups A–E)."
-    )
-    parser.add_argument("--group",    type=str, default="D",
-                        choices=["A", "B", "C", "D", "E"],
-                        help="Ablation group (default: D = full DLOS).")
-    parser.add_argument("--seed",     type=int,   default=42)
-    parser.add_argument("--epochs",   type=int,   default=3000)
-    parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--lr",       type=float, default=1e-4)
-    parser.add_argument("--lambda-wm", type=float, default=0.1,
-                        help="Global weight on the WM loss term.")
-    parser.add_argument("--device",   type=str,   default="auto")
+    parser = argparse.ArgumentParser(description="Stage 1 training for DLOS-DP.")
+    parser.add_argument("--group", type=str, default="D", choices=["A", "B", "C", "D", "E"])
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--lambda-wm", type=float, default=0.1)
+    parser.add_argument("--device", type=str, default="auto")
     parser.add_argument(
         "--zarr-path",
         type=str,
@@ -492,20 +452,25 @@ def main() -> None:
         "--dp-repo",
         type=str,
         default="/home/Travor/workspaces/diffusion_policy",
-        help="Path to the cloned diffusion_policy repository.",
     )
     parser.add_argument(
         "--outdir",
         type=str,
-        default="artifacts/dlos_runs/group_D_seed42",
+        default="/mnt/d/Code/Learning/EI/EI-learning-notes/Diffusion_Policy/artifacts/dlos_runs/group_D_seed42",
     )
-    parser.add_argument(
-        "--checkpoint",
-        type=str,
-        default="",
-        help="Path to a checkpoint to resume training from.",
-    )
-    parser.add_argument("--val-ratio",  type=float, default=0.1)
+    parser.add_argument("--checkpoint", type=str, default="")
+    parser.add_argument("--val-ratio", type=float, default=0.02)
+    parser.add_argument("--max-train-episodes", type=int, default=90)
+    parser.add_argument("--eval-every", type=int, default=10)
+    parser.add_argument("--n-train", type=int, default=2)
+    parser.add_argument("--n-train-vis", type=int, default=1)
+    parser.add_argument("--n-test", type=int, default=10)
+    parser.add_argument("--n-test-vis", type=int, default=1)
+    parser.add_argument("--n-envs", type=int, default=2)
+    parser.add_argument("--max-steps", type=int, default=300)
+    parser.add_argument("--num-workers", type=int, default=0)
+    parser.add_argument("--max-train-batches", type=int, default=None)
+    parser.add_argument("--max-val-batches", type=int, default=None)
     args = parser.parse_args()
 
     cfg = DLOSConfig(
@@ -520,9 +485,9 @@ def main() -> None:
         dp_repo_path=args.dp_repo,
         checkpoint_path=args.checkpoint,
         val_ratio=args.val_ratio,
+        max_train_episodes=args.max_train_episodes,
         outdir=args.outdir,
     )
-
     train(cfg, args)
 
 

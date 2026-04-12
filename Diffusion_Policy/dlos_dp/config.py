@@ -1,4 +1,4 @@
-"""DLOSConfig: single dataclass holding all DLOS-DP hyper-parameters."""
+"""Configuration for DLOS-DP experiments."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -6,66 +6,47 @@ from dataclasses import dataclass, field
 
 @dataclass
 class DLOSConfig:
-    # ------------------------------------------------------------------ #
-    # World-model / encoder dimensions                                     #
-    # ------------------------------------------------------------------ #
-    obs_dim: int = 384      # DINOv2-S/14 CLS token dimension
-    action_dim: int = 2     # Push-T action: (x, y) end-effector position
-    wm_hidden: int = 256    # OutcomeWorldModel hidden layer width
+    obs_dim: int = 384
+    action_dim: int = 2
+    wm_hidden: int = 256
 
-    # ------------------------------------------------------------------ #
-    # Loss weighting                                                       #
-    # ------------------------------------------------------------------ #
-    lambda_wm: float = 0.1  # global scale on L_wm before adding to L_diff
+    lambda_wm: float = 0.1
 
-    # ------------------------------------------------------------------ #
-    # DINOv2 settings                                                      #
-    # ------------------------------------------------------------------ #
-    dino_model: str = "dinov2_vits14"   # torch.hub model name
-    dino_img_size: int = 224            # input resize (ViT-S/14 native)
+    dino_model: str = "dinov2_vits14"
+    dino_img_size: int = 224
 
-    # ------------------------------------------------------------------ #
-    # Push-T task settings (must match the zarr data)                      #
-    # ------------------------------------------------------------------ #
-    obs_horizon: int = 2        # number of observation frames per sample
-    pred_horizon: int = 16      # action chunk length
-    action_horizon: int = 8     # executed action steps per inference step
-    num_train_timesteps: int = 100  # DDPM diffusion steps
+    obs_horizon: int = 2
+    pred_horizon: int = 16
+    action_horizon: int = 8
+    num_train_timesteps: int = 100
 
-    # ------------------------------------------------------------------ #
-    # Ablation group                                                       #
-    # ------------------------------------------------------------------ #
-    # A — no WM (baseline)
-    # B — WM with ground-truth action (no gradient to ε_θ)
-    # C — WM with x̂₀|k, action stop-gradient (no gradient to ε_θ)
-    # D — DLOS full: WM with x̂₀|k, gradient flows through to ε_θ   ← main
-    # E — same as D but x̂₀|k stop-gradient (tests whether grad path matters)
     group: str = "D"
-
-    # ------------------------------------------------------------------ #
-    # Paths                                                                #
-    # ------------------------------------------------------------------ #
     dp_repo_path: str = "/home/Travor/workspaces/diffusion_policy"
     zarr_path: str = (
         "/home/Travor/workspaces/diffusion_policy/data/pusht/pusht_cchi_v7_replay.zarr"
     )
-    # Optional: resume from a pre-trained DP checkpoint before DLOS fine-tune
     checkpoint_path: str = ""
 
-    # ------------------------------------------------------------------ #
-    # Training                                                             #
-    # ------------------------------------------------------------------ #
     seed: int = 42
-    device: str = "auto"        # "auto" | "cuda" | "cpu"
-    epochs: int = 3000          # training epochs (same as official DP)
-    batch_size: int = 64
+    device: str = "auto"
+    epochs: int = 100
+    batch_size: int = 16
     lr: float = 1e-4
-    val_ratio: float = 0.1
+    val_ratio: float = 0.02
+    max_train_episodes: int | None = 90
+    pad_before: int = 1
+    pad_after: int = 7
     outdir: str = "artifacts/dlos_runs"
+    crop_shape: tuple[int, int] = (84, 84)
+    diffusion_step_embed_dim: int = 128
+    down_dims: tuple[int, int, int] = (512, 1024, 2048)
+    kernel_size: int = 5
+    n_groups: int = 8
+    cond_predict_scale: bool = True
+    obs_encoder_group_norm: bool = True
+    eval_fixed_crop: bool = True
+    num_inference_steps: int = 100
 
-    # ------------------------------------------------------------------ #
-    # Stage-0 WM probe                                                     #
-    # ------------------------------------------------------------------ #
     wm_probe_epochs: int = 50
     wm_probe_lr: float = 1e-4
     dino_embed_cache: str = "artifacts/dino_embeddings.npy"

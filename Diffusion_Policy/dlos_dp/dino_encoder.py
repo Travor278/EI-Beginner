@@ -1,28 +1,8 @@
-"""
-FrozenDINOv2Encoder — wraps a frozen DINOv2 ViT-S/14 from torch.hub.
-
-Usage
------
-    encoder = FrozenDINOv2Encoder()          # loads dinov2_vits14
-    z = encoder(img_batch)                   # (B, 384)
-
-Input contract
---------------
-- img: torch.Tensor of shape (B, 3, H, W)
-- dtype: float32 with values in [0, 1]  OR  uint8 with values in [0, 255].
-  Both are handled automatically.
-- Any spatial resolution is accepted; the transform resizes to 224×224.
-
-Output
-------
-- (B, 384) CLS token embedding (no gradient, model is frozen).
-
-First-run note
---------------
-torch.hub.load downloads ~300 MB the first time; weights are cached under
-~/.cache/torch/hub.  Use torch.hub.set_dir() to override the cache location.
-"""
+"""Frozen DINOv2 encoder used by DLOS-DP."""
 from __future__ import annotations
+
+import os
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -30,30 +10,47 @@ import torchvision.transforms as T
 
 
 class FrozenDINOv2Encoder(nn.Module):
-    """Frozen DINOv2 ViT-S/14 image encoder.
-
-    All parameters are frozen at construction time.  The forward pass is
-    decorated with @torch.no_grad() so it never accumulates gradients or
-    affects the autograd graph — safe to call inside compute_loss.
-    """
+    """Frozen DINOv2 ViT-S/14 image encoder."""
 
     def __init__(
         self,
         model_name: str = "dinov2_vits14",
         img_size: int = 224,
+        repo_path: str | None = None,
+        weights_path: str | None = None,
     ) -> None:
         super().__init__()
-        # Load DINOv2 from facebookresearch hub
-        self.model = torch.hub.load(
-            "facebookresearch/dinov2",
-            model_name,
-            verbose=False,
+        default_repo = os.environ.get("DLOS_DINO_REPO", "/mnt/d/Code/Learning/EI/_cache/dinov2")
+        default_weights = os.environ.get(
+            "DLOS_DINO_WEIGHTS",
+            "/mnt/d/Code/Learning/EI/_cache/dinov2_vits14_pretrain.pth",
         )
-        # Freeze all parameters
+        repo_path = repo_path or default_repo
+        weights_path = weights_path or default_weights
+
+        repo = Path(repo_path)
+        weights = Path(weights_path)
+        if repo.exists():
+            hub_kwargs = {
+                "repo_or_dir": str(repo),
+                "model": model_name,
+                "source": "local",
+                "verbose": False,
+            }
+            if weights.exists():
+                hub_kwargs["weights"] = str(weights)
+                hub_kwargs["pretrained"] = True
+            self.model = torch.hub.load(**hub_kwargs)
+        else:
+            self.model = torch.hub.load(
+                "facebookresearch/dinov2",
+                model_name,
+                verbose=False,
+            )
         for param in self.model.parameters():
             param.requires_grad_(False)
+        self.model.eval()
 
-        # Spatial resize + ImageNet normalisation (DINOv2 was trained with these)
         self.transform = T.Compose([
             T.Resize(
                 (img_size, img_size),
@@ -68,21 +65,8 @@ class FrozenDINOv2Encoder(nn.Module):
 
     @torch.no_grad()
     def forward(self, img: torch.Tensor) -> torch.Tensor:
-        """
-        Parameters
-        ----------
-        img : (B, 3, H, W) — float32 [0,1] or uint8 [0,255]
-
-        Returns
-        -------
-        (B, 384) L2-normalised CLS token, float32, on the same device as img.
-        """
         if img.dtype == torch.uint8:
             img = img.float() / 255.0
         img = self.transform(img)
-        # Use forward_features() which returns a dict; extract the L2-normalised
-        # CLS token under 'x_norm_clstoken'.  This is the canonical way to get
-        # features from the facebookresearch/dinov2 torch.hub models and avoids
-        # any ambiguity about the plain __call__ return type.
         feat = self.model.forward_features(img)
-        return feat["x_norm_clstoken"]  # (B, 384)
+        return feat["x_norm_clstoken"]

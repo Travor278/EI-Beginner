@@ -1,0 +1,15 @@
+{
+  "zarr_path": "/home/Travor/workspaces/diffusion_policy/data/pusht/pusht_cchi_v7_replay.zarr",
+  "checkpoint": "/mnt/d/Code/Learning/EI/EI-learning-notes/Diffusion_Policy/artifacts/state_forward_probe/best_state_forward_probe.pt",
+  "obs_horizon": 2,
+  "pred_horizon": 16,
+  "val_ratio": 0.1,
+  "seed": 43,
+  "num_chunks": 20239,
+  "hardness_min": 0.4358784556388855,
+  "hardness_max": 9.843748092651367,
+  "hardness_mean": 2.431201934814453,
+  "hardness_std": 0.9453202486038208,
+  "raw_npy": "/mnt/d/Code/Learning/EI/EI-learning-notes/Diffusion_Policy/artifacts/phrew_seed43/chunk_hardness.npy",
+  "norm_npy": "/mnt/d/Code/Learning/EI/EI-learning-notes/Diffusion_Policy/artifacts/phrew_seed43/chunk_hardness_norm.npy"
+}

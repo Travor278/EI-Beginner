@@ -41,9 +41,15 @@ def softmax_loss_naive(W, X, y, reg):
 
         loss -= logp[y[i]]  # negative log probability is the loss
 
+        for j in range(num_classes):
+            if j!= y[i]:
+                dW[:, j] += p[j] * X[i]
+            else:
+                dW[:, y[i]] += (p[y[i]] - 1) * X[i]
 
     # normalized hinge loss plus regularization
     loss = loss / num_train + reg * np.sum(W * W)
+    dW = dW / num_train + 2 * reg * W
 
     #############################################################################
     # TODO:                                                                     #
@@ -74,6 +80,15 @@ def softmax_loss_vectorized(W, X, y, reg):
     # Implement a vectorized version of the softmax loss, storing the           #
     # result in loss.                                                           #
     #############################################################################
+    scores = X.dot(W)
+    scores -= np.max(scores, axis=1, keepdims=True)
+    exp_scores = np.exp(scores)
+    row_sum = np.sum(exp_scores, axis=1, keepdims=True)
+    probs = exp_scores / row_sum
+    logprobs = np.log(probs)
+
+    loss -= logprobs[np.arange(y.shape[0]), y]
+    loss = np.sum(loss) / y.shape[0] + reg * np.sum(W * W)
 
 
     #############################################################################
@@ -85,6 +100,11 @@ def softmax_loss_vectorized(W, X, y, reg):
     # to reuse some of the intermediate values that you used to compute the     #
     # loss.                                                                     #
     #############################################################################
+    dscores = probs.copy()
+    dscores[np.arange(y.shape[0]), y] -= 1
+    dW += X.T.dot(dscores)
+
+    dW = dW / y.shape[0] + 2 * reg * W
 
 
     return loss, dW

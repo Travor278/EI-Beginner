@@ -1,0 +1,13 @@
+{
+  "seed": 42,
+  "baseline_mse": 0.0854189544916153,
+  "best_val_mse": 6.573434352874756,
+  "improvement_ratio": 76.95521903771373,
+  "passed": false,
+  "checkpoint": "/mnt/d/Code/Learning/EI/EI-learning-notes/Diffusion_Policy/artifacts/wm_probe_smoke/best_wm_probe.pt",
+  "embed_cache": "/mnt/d/Code/Learning/EI/EI-learning-notes/Diffusion_Policy/artifacts/wm_probe_smoke/dino_embeddings_smoke_b2.npy",
+  "frames_used": 420,
+  "episodes_used": 3,
+  "train_transitions": 257,
+  "val_transitions": 160
+}
