@@ -38,7 +38,8 @@ class SFCConfig:
 
     seed: int = 42
     device: str = "auto"
-    epochs: int = 100
+    epochs: int = 100   # 100 for first-pass; use 200 for extended convergence check
+                        # (A42 still rising at ep90 → both A and D may not have converged)
     batch_size: int = 16
     lr: float = 1e-4
     val_ratio: float = 0.1
