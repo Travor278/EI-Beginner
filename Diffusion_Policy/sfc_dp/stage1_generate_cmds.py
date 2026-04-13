@@ -29,7 +29,7 @@ from pathlib import Path
 
 
 GROUPS = ["A", "B", "C", "D", "E"]
-SEEDS  = [42]
+DEFAULT_SEEDS = [42]
 
 GROUP_DESC = {
     "A": "baseline: standard DP, no L_freq",
@@ -60,9 +60,12 @@ def build_cmd(
     batch_size: int,
     lr: float,
     lambda_freq: float,
+    lambda_warmup_epochs: int,
+    soft_mask: bool,
+    soft_mask_tau: float,
 ) -> str:
     run_dir = f"{runs_outdir}/{group}_seed{seed}"
-    return (
+    cmd = (
         f"python {script_dir}/train_sfc.py"
         f" --group {group}"
         f" --seed {seed}"
@@ -70,10 +73,15 @@ def build_cmd(
         f" --batch-size {batch_size}"
         f" --lr {lr}"
         f" --lambda-freq {lambda_freq}"
+        f" --lambda-warmup-epochs {lambda_warmup_epochs}"
         f" --zarr-path {zarr_path}"
         f" --dp-repo {dp_repo}"
         f" --outdir {run_dir}"
     )
+    if soft_mask:
+        cmd += " --soft-mask"
+        cmd += f" --soft-mask-tau {soft_mask_tau}"
+    return cmd
 
 
 def generate_script(args: argparse.Namespace) -> str:
@@ -94,7 +102,7 @@ def generate_script(args: argparse.Namespace) -> str:
 
     for group in GROUPS:
         lines.append(f"# ── Group {group}: {GROUP_DESC[group]}")
-        for seed in SEEDS:
+        for seed in args.seeds:
             cmd = build_cmd(
                 group=group,
                 seed=seed,
@@ -106,6 +114,9 @@ def generate_script(args: argparse.Namespace) -> str:
                 batch_size=args.batch_size,
                 lr=args.lr,
                 lambda_freq=args.lambda_freq,
+                lambda_warmup_epochs=args.lambda_warmup_epochs,
+                soft_mask=args.soft_mask,
+                soft_mask_tau=args.soft_mask_tau,
             )
             lines.append(f"echo '>>> group={group} seed={seed}'")
             lines.append(cmd)
@@ -145,8 +156,12 @@ def main() -> None:
     parser.add_argument("--epochs",      type=int,   default=100)
     parser.add_argument("--batch-size",  type=int,   default=16)
     parser.add_argument("--lr",          type=float, default=1e-4)
-    parser.add_argument("--lambda-freq", type=float, default=0.1,
+    parser.add_argument("--lambda-freq", type=float, default=0.001,
                         help="Weight on L_freq for groups B–E.")
+    parser.add_argument("--lambda-warmup-epochs", type=int, default=20)
+    parser.add_argument("--soft-mask", action="store_true")
+    parser.add_argument("--soft-mask-tau", type=float, default=0.05)
+    parser.add_argument("--seeds", type=int, nargs="+", default=DEFAULT_SEEDS)
     args = parser.parse_args()
 
     script = generate_script(args)
@@ -162,8 +177,8 @@ def main() -> None:
 
     print(f"Generated: {out}")
     print(f"  Groups : {GROUPS}")
-    print(f"  Seeds  : {SEEDS}")
-    print(f"  Total  : {len(GROUPS) * len(SEEDS)} runs")
+    print(f"  Seeds  : {args.seeds}")
+    print(f"  Total  : {len(GROUPS) * len(args.seeds)} runs")
     print(f"\nRun with:\n  bash {out}")
 
     print("\n--- script preview (first 20 lines) ---")

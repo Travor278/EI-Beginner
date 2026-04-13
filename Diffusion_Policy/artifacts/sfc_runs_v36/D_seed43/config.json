@@ -1,0 +1,16 @@
+{
+  "group": "D",
+  "seed": 43,
+  "epochs": 100,
+  "batch_size": 16,
+  "lr": 0.0001,
+  "lambda_freq": 0.001,
+  "lambda_warmup_epochs": 20,
+  "soft_mask": false,
+  "soft_mask_tau": 0.05,
+  "eval_every": 10,
+  "best_metric": 0.9009724764303915,
+  "best_val_loss": 0.0352163684283588,
+  "zarr_path": "/home/Travor/workspaces/diffusion_policy/data/pusht/pusht_cchi_v7_replay.zarr",
+  "dp_repo_path": "/home/Travor/workspaces/diffusion_policy"
+}

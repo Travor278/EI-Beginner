@@ -23,9 +23,19 @@ Diffusion_Policy/sfc_dp/__pycache__/
 
 # SFC-DP local artifacts
 Diffusion_Policy/artifacts/sfc_smoke/
+Diffusion_Policy/artifacts/sfc_smoke_v36/
 Diffusion_Policy/artifacts/run_sfc_grid_tmp.sh
 Diffusion_Policy/artifacts/sfc_ad_seed42.log
 Diffusion_Policy/artifacts/sfc_ad_seed42.pid
+Diffusion_Policy/artifacts/sfc_ad_seed42_v36.log
+Diffusion_Policy/artifacts/sfc_ad_seed42_v36.pid
+Diffusion_Policy/artifacts/sfc_ad_seed43_v36.log
+Diffusion_Policy/artifacts/sfc_ad_seed43_v36.pid
+Diffusion_Policy/artifacts/sfc_d_seed42_softmask.log
+Diffusion_Policy/artifacts/sfc_d_seed42_softmask.pid
 Diffusion_Policy/artifacts/sfc_runs/*/checkpoints/
 Diffusion_Policy/artifacts/sfc_runs/*/media/
 Diffusion_Policy/artifacts/sfc_runs/*/best.pt
+Diffusion_Policy/artifacts/sfc_runs_v36/*/checkpoints/
+Diffusion_Policy/artifacts/sfc_runs_v36/*/media/
+Diffusion_Policy/artifacts/sfc_runs_v36/*/best.pt
