@@ -1,41 +1,66 @@
+# ---------------------------------------------------------------------------
+# Python / notebook caches
+# ---------------------------------------------------------------------------
+**/__pycache__/
+**/.ipynb_checkpoints/
+
+# ---------------------------------------------------------------------------
 # CS231n local saved models
+# ---------------------------------------------------------------------------
 CS231n/assignment1/cs231n/saved/*.npy
 
-# Diffusion Policy large local artifacts
+# ---------------------------------------------------------------------------
+# Diffusion Policy local artifacts
+# Keep lightweight committed summaries, ignore heavy local runs.
+# ---------------------------------------------------------------------------
+Diffusion_Policy/artifacts/*.log
+Diffusion_Policy/artifacts/*.pid
+Diffusion_Policy/artifacts/*windows_pid.txt
+Diffusion_Policy/artifacts/run_sfc_grid_tmp.sh
+Diffusion_Policy/artifacts/run_lambda_sweep.sh
+
 Diffusion_Policy/artifacts/dlos_smoke/
 Diffusion_Policy/artifacts/dlos_smoke_recheck/
 Diffusion_Policy/artifacts/phrew/
 Diffusion_Policy/artifacts/phrew_runs/
-Diffusion_Policy/artifacts/phrew_seed43.log
 Diffusion_Policy/artifacts/phrew_seed43/
-Diffusion_Policy/artifacts/wm_probe_full_seed42.pid
 Diffusion_Policy/artifacts/wm_probe_full_seed42/
 Diffusion_Policy/artifacts/wm_probe_smoke/
-
-# Locally generated shareable bundles; keep the committed analysis-only snapshot
-Diffusion_Policy/artifacts_shareable/
-Diffusion_Policy/artifacts_shareable_novideo/
-
-# Python cache
-Diffusion_Policy/dlos_dp/__pycache__/
-Diffusion_Policy/pred_hardness/__pycache__/
-Diffusion_Policy/sfc_dp/__pycache__/
-
-# SFC-DP local artifacts
 Diffusion_Policy/artifacts/sfc_smoke/
 Diffusion_Policy/artifacts/sfc_smoke_v36/
-Diffusion_Policy/artifacts/run_sfc_grid_tmp.sh
-Diffusion_Policy/artifacts/sfc_ad_seed42.log
-Diffusion_Policy/artifacts/sfc_ad_seed42.pid
-Diffusion_Policy/artifacts/sfc_ad_seed42_v36.log
-Diffusion_Policy/artifacts/sfc_ad_seed42_v36.pid
-Diffusion_Policy/artifacts/sfc_ad_seed43_v36.log
-Diffusion_Policy/artifacts/sfc_ad_seed43_v36.pid
-Diffusion_Policy/artifacts/sfc_d_seed42_softmask.log
-Diffusion_Policy/artifacts/sfc_d_seed42_softmask.pid
-Diffusion_Policy/artifacts/sfc_runs/*/checkpoints/
-Diffusion_Policy/artifacts/sfc_runs/*/media/
-Diffusion_Policy/artifacts/sfc_runs/*/best.pt
-Diffusion_Policy/artifacts/sfc_runs_v36/*/checkpoints/
-Diffusion_Policy/artifacts/sfc_runs_v36/*/media/
-Diffusion_Policy/artifacts/sfc_runs_v36/*/best.pt
+
+# SFC run directories:
+# ignore everything by default, but keep lightweight analysis files visible
+Diffusion_Policy/artifacts/sfc_runs/**
+!Diffusion_Policy/artifacts/sfc_runs/
+!Diffusion_Policy/artifacts/sfc_runs/*/
+!Diffusion_Policy/artifacts/sfc_runs/*/config.json
+!Diffusion_Policy/artifacts/sfc_runs/*/logs.json.txt
+!Diffusion_Policy/artifacts/sfc_runs/*/training_history.csv
+
+Diffusion_Policy/artifacts/sfc_runs_v36/**
+!Diffusion_Policy/artifacts/sfc_runs_v36/
+!Diffusion_Policy/artifacts/sfc_runs_v36/*/
+!Diffusion_Policy/artifacts/sfc_runs_v36/*/config.json
+!Diffusion_Policy/artifacts/sfc_runs_v36/*/logs.json.txt
+!Diffusion_Policy/artifacts/sfc_runs_v36/*/training_history.csv
+
+Diffusion_Policy/artifacts/sfc_runs_diag_v36/**
+!Diffusion_Policy/artifacts/sfc_runs_diag_v36/
+!Diffusion_Policy/artifacts/sfc_runs_diag_v36/*/
+!Diffusion_Policy/artifacts/sfc_runs_diag_v36/*/config.json
+!Diffusion_Policy/artifacts/sfc_runs_diag_v36/*/logs.json.txt
+!Diffusion_Policy/artifacts/sfc_runs_diag_v36/*/training_history.csv
+
+Diffusion_Policy/artifacts/sfc_runs_lamsweep/**
+!Diffusion_Policy/artifacts/sfc_runs_lamsweep/
+!Diffusion_Policy/artifacts/sfc_runs_lamsweep/*/
+!Diffusion_Policy/artifacts/sfc_runs_lamsweep/*/config.json
+!Diffusion_Policy/artifacts/sfc_runs_lamsweep/*/logs.json.txt
+!Diffusion_Policy/artifacts/sfc_runs_lamsweep/*/training_history.csv
+
+# ---------------------------------------------------------------------------
+# Locally generated shareable bundles
+# ---------------------------------------------------------------------------
+Diffusion_Policy/artifacts_shareable/
+Diffusion_Policy/artifacts_shareable_novideo/
