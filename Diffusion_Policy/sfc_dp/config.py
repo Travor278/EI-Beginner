@@ -1,4 +1,17 @@
-"""Configuration for SFC-DP experiments."""
+"""Configuration for SFC-DP experiments.
+
+Task presets
+------------
+Push-T (default):
+    zarr_path  = .../pusht_cchi_v7_replay.zarr
+    action_dim = 2, obs_horizon = 2, pred_horizon = 16, action_horizon = 8
+    lambda_freq default = 0.001  (optimal λ for Push-T = 0.01; see Section 12)
+
+Robomimic Lift / Can  (use train_sfc_robomimic.py):
+    zarr_path  = .../robomimic/lift/ph/image_abs.hdf5   (or .zarr)
+    action_dim = 7, obs_horizon = 2, pred_horizon = 16, action_horizon = 8
+    lambda_freq default = 0.01   (start with Push-T optimal; tune if needed)
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
