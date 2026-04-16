@@ -22,7 +22,7 @@
 
 ## 2. 图1：系统架构
 
-![ROS 2 系统架构示意图（本地资料图）](./Architecture.png)
+![ROS 2 系统架构示意图（本地资料图）](./figures/Architecture.png)
 
 > 图 1：`Architecture.png`. 阅读时建议从上到下看：用户应用层 -> ROS client library -> `rcl` -> `rmw` -> 具体 DDS/RTPS 实现。
 
@@ -159,7 +159,7 @@ ROS 2 Composition 文档给出的核心思想是：同一套节点 API，既可�
 
 ## 4. 图2：DDS / 中间件架构
 
-![ROS 2 中间件与类型支持示意图（本地资料图）](./API.png)
+![ROS 2 中间件与类型支持示意图（本地资料图）](./figures/API.png)
 
 > 图 2：`API.png`. 理解这张图时，建议把“用户看见的消息类型”和“中间件真正发送的样本”分开看。
 
