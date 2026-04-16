@@ -18,6 +18,9 @@ Diffusion_Policy/artifacts/*.pid
 Diffusion_Policy/artifacts/*windows_pid.txt
 Diffusion_Policy/artifacts/run_sfc_grid_tmp.sh
 Diffusion_Policy/artifacts/run_lambda_sweep.sh
+Diffusion_Policy/artifacts/run_sfc_ae_200ep.sh
+Diffusion_Policy/artifacts/run_sfc_ae_200ep_part2.sh
+Diffusion_Policy/artifacts/run_sfc_e43_resume.sh
 
 Diffusion_Policy/artifacts/dlos_smoke/
 Diffusion_Policy/artifacts/dlos_smoke_recheck/
@@ -58,6 +61,14 @@ Diffusion_Policy/artifacts/sfc_runs_lamsweep/**
 !Diffusion_Policy/artifacts/sfc_runs_lamsweep/*/config.json
 !Diffusion_Policy/artifacts/sfc_runs_lamsweep/*/logs.json.txt
 !Diffusion_Policy/artifacts/sfc_runs_lamsweep/*/training_history.csv
+
+Diffusion_Policy/artifacts/sfc_runs_200ep/**
+!Diffusion_Policy/artifacts/sfc_runs_200ep/
+!Diffusion_Policy/artifacts/sfc_runs_200ep/*/
+!Diffusion_Policy/artifacts/sfc_runs_200ep/*/config.json
+!Diffusion_Policy/artifacts/sfc_runs_200ep/*/logs.json.txt
+!Diffusion_Policy/artifacts/sfc_runs_200ep/*/training_history.csv
+Diffusion_Policy/artifacts/sfc_runs_200ep/E_seed43/**
 
 # ---------------------------------------------------------------------------
 # Locally generated shareable bundles
