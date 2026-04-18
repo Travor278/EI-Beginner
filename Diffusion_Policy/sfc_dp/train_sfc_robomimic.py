@@ -29,6 +29,9 @@ Gate criterion (v3.6 final gate)
 from __future__ import annotations
 
 import argparse
+import collections
+import collections.abc
+import copy
 import json
 import random
 import sys
@@ -44,6 +47,10 @@ _THIS_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _THIS_DIR.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+for _name in ("Iterable", "Mapping", "MutableMapping", "Sequence"):
+    if not hasattr(collections, _name):
+        setattr(collections, _name, getattr(collections.abc, _name))
 
 from sfc_dp.config import SFCConfig
 from sfc_dp.sfc_loss import SFCLoss
@@ -61,7 +68,7 @@ from sfc_dp.train_sfc import (   # reuse helpers from Push-T script
 
 TASK_CONFIGS = {
     "lift": {
-        "action_dim": 7,
+        "base_action_dim": 7,
         "obs_horizon": 2,
         "pred_horizon": 16,
         "action_horizon": 8,
@@ -81,7 +88,7 @@ TASK_CONFIGS = {
         "max_steps": 400,
     },
     "can": {
-        "action_dim": 7,
+        "base_action_dim": 7,
         "obs_horizon": 2,
         "pred_horizon": 16,
         "action_horizon": 8,
@@ -112,7 +119,9 @@ def train(cfg: SFCConfig, args: argparse.Namespace) -> None:
     set_seed(cfg.seed)
 
     task_cfg = TASK_CONFIGS[args.task]
-    shape_meta = task_cfg["shape_meta"]
+    shape_meta = copy.deepcopy(task_cfg["shape_meta"])
+    action_dim = 10 if args.abs_action else int(task_cfg["base_action_dim"])
+    shape_meta["action"]["shape"] = [action_dim]
 
     outdir = Path(args.outdir).resolve()
     ckpt_dir = outdir / "checkpoints"
@@ -126,9 +135,7 @@ def train(cfg: SFCConfig, args: argparse.Namespace) -> None:
     # Imports from dp repo
     # ------------------------------------------------------------------
     from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
-    from diffusion_policy.common.normalize_util import get_image_range_normalizer
     from diffusion_policy.common.pytorch_util import dict_apply
-    from diffusion_policy.model.common.normalizer import LinearNormalizer
     from diffusion_policy.policy.diffusion_unet_hybrid_image_policy import (
         DiffusionUnetHybridImagePolicy,
     )
@@ -138,9 +145,7 @@ def train(cfg: SFCConfig, args: argparse.Namespace) -> None:
         from diffusion_policy.dataset.robomimic_replay_image_dataset import (
             RobomimicReplayImageDataset,
         )
-        from diffusion_policy.env_runner.robomimic_image_runner import (
-            RobomimicImageRunner,
-        )
+        import diffusion_policy.env_runner.robomimic_image_runner as robomimic_runner_mod
     except ImportError as e:
         raise ImportError(
             "Could not import Robomimic dataset/runner from dp repo. "
@@ -148,11 +153,20 @@ def train(cfg: SFCConfig, args: argparse.Namespace) -> None:
             f"Original error: {e}"
         )
 
+    original_async_vector_env = robomimic_runner_mod.AsyncVectorEnv
+
+    def async_vector_env_no_shared(*env_args, **env_kwargs):
+        env_kwargs.setdefault("shared_memory", False)
+        return original_async_vector_env(*env_args, **env_kwargs)
+
+    robomimic_runner_mod.AsyncVectorEnv = async_vector_env_no_shared
+    RobomimicImageRunner = robomimic_runner_mod.RobomimicImageRunner
+
     # ------------------------------------------------------------------
     # Datasets
     # ------------------------------------------------------------------
     print(f"Building Robomimic {args.task} datasets …")
-    _dataset_kwargs = dict(
+    dataset_kwargs = dict(
         dataset_path=cfg.zarr_path,
         shape_meta=shape_meta,
         horizon=cfg.pred_horizon,
@@ -163,17 +177,10 @@ def train(cfg: SFCConfig, args: argparse.Namespace) -> None:
         rotation_rep="rotation_6d",
         use_legacy_normalizer=False,
         seed=cfg.seed,
-    )
-    train_dataset = RobomimicReplayImageDataset(
         val_ratio=cfg.val_ratio,
-        split="train",
-        **_dataset_kwargs,
     )
-    val_dataset = RobomimicReplayImageDataset(
-        val_ratio=cfg.val_ratio,
-        split="val",
-        **_dataset_kwargs,
-    )
+    train_dataset = RobomimicReplayImageDataset(**dataset_kwargs)
+    val_dataset = train_dataset.get_validation_dataset()
     print(f"  train={len(train_dataset)}, val={len(val_dataset)}")
 
     train_loader = DataLoader(
@@ -228,22 +235,7 @@ def train(cfg: SFCConfig, args: argparse.Namespace) -> None:
     # Normalizer — fit from dataset's replay buffer
     # ------------------------------------------------------------------
     print("Fitting normalizer …")
-    normalizer = LinearNormalizer()
-    # Collect low-dim obs + actions from replay buffer
-    rb = train_dataset.replay_buffer
-    norm_data = {"action": rb["action"][:]}
-    for key in shape_meta["obs"]:
-        if shape_meta["obs"][key]["type"] == "low_dim":
-            try:
-                norm_data[key] = rb[f"obs/{key}"][:]
-            except KeyError:
-                # some zarrs store obs at top level
-                norm_data[key] = rb[key][:]
-    normalizer.fit(data=norm_data, last_n_dims=1, mode="limits")
-    # Image normalizer: map [0, 255] → [-1, 1]
-    for key in shape_meta["obs"]:
-        if shape_meta["obs"][key]["type"] == "rgb":
-            normalizer[key] = get_image_range_normalizer()
+    normalizer = train_dataset.get_normalizer()
     policy.set_normalizer(normalizer)
     policy.to(device)
 
@@ -266,14 +258,14 @@ def train(cfg: SFCConfig, args: argparse.Namespace) -> None:
         shape_meta=shape_meta,
         n_train=args.n_train,
         n_train_vis=args.n_train_vis,
-        n_test=task_cfg["n_test"],
-        n_test_vis=task_cfg["n_test_vis"],
-        max_steps=task_cfg["max_steps"],
+        n_test=args.n_test,
+        n_test_vis=args.n_test_vis,
+        max_steps=args.max_steps,
         n_obs_steps=cfg.obs_horizon,
         n_action_steps=cfg.action_horizon,
         abs_action=args.abs_action,
-        rotation_rep="rotation_6d",
         tqdm_interval_sec=1.0,
+        n_envs=args.n_envs,
     )
 
     # ------------------------------------------------------------------
@@ -478,12 +470,23 @@ def main() -> None:
     parser.add_argument("--eval-every", type=int, default=10)
     parser.add_argument("--n-train",     type=int, default=2)
     parser.add_argument("--n-train-vis", type=int, default=1)
+    parser.add_argument("--n-test",      type=int, default=None)
+    parser.add_argument("--n-test-vis",  type=int, default=None)
+    parser.add_argument("--max-steps",   type=int, default=None)
+    parser.add_argument("--n-envs",      type=int, default=4)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--max-train-batches", type=int, default=None)
     parser.add_argument("--max-val-batches",   type=int, default=None)
     args = parser.parse_args()
 
     task_cfg = TASK_CONFIGS[args.task]
+    if args.n_test is None:
+        args.n_test = int(task_cfg["n_test"])
+    if args.n_test_vis is None:
+        args.n_test_vis = int(task_cfg["n_test_vis"])
+    if args.max_steps is None:
+        args.max_steps = int(task_cfg["max_steps"])
+
     cfg = SFCConfig(
         group=args.group,
         seed=args.seed,
@@ -499,7 +502,7 @@ def main() -> None:
         dp_repo_path=args.dp_repo,
         checkpoint_path=args.checkpoint,
         val_ratio=args.val_ratio,
-        action_dim=task_cfg["action_dim"],
+        action_dim=10 if args.abs_action else int(task_cfg["base_action_dim"]),
         obs_horizon=task_cfg["obs_horizon"],
         pred_horizon=task_cfg["pred_horizon"],
         action_horizon=task_cfg["action_horizon"],

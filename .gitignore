@@ -8,6 +8,7 @@
 # CS231n local saved models
 # ---------------------------------------------------------------------------
 CS231n/assignment1/cs231n/saved/*.npy
+CS231n/assignment2/cs231n/datasets/coco_captioning/
 
 # ---------------------------------------------------------------------------
 # Diffusion Policy local artifacts
@@ -21,6 +22,8 @@ Diffusion_Policy/artifacts/run_lambda_sweep.sh
 Diffusion_Policy/artifacts/run_sfc_ae_200ep.sh
 Diffusion_Policy/artifacts/run_sfc_ae_200ep_part2.sh
 Diffusion_Policy/artifacts/run_sfc_e43_resume.sh
+Diffusion_Policy/artifacts/run_sfc_lift_gate.sh
+Diffusion_Policy/artifacts/run_sfc_lift_gate_resume.sh
 
 Diffusion_Policy/artifacts/dlos_smoke/
 Diffusion_Policy/artifacts/dlos_smoke_recheck/
@@ -31,6 +34,7 @@ Diffusion_Policy/artifacts/wm_probe_full_seed42/
 Diffusion_Policy/artifacts/wm_probe_smoke/
 Diffusion_Policy/artifacts/sfc_smoke/
 Diffusion_Policy/artifacts/sfc_smoke_v36/
+Diffusion_Policy/artifacts/sfc_robomimic_smoke/
 
 # SFC run directories:
 # ignore everything by default, but keep lightweight analysis files visible
@@ -69,6 +73,13 @@ Diffusion_Policy/artifacts/sfc_runs_200ep/**
 !Diffusion_Policy/artifacts/sfc_runs_200ep/*/logs.json.txt
 !Diffusion_Policy/artifacts/sfc_runs_200ep/*/training_history.csv
 Diffusion_Policy/artifacts/sfc_runs_200ep/E_seed43/**
+
+Diffusion_Policy/artifacts/sfc_robomimic/**
+!Diffusion_Policy/artifacts/sfc_robomimic/
+!Diffusion_Policy/artifacts/sfc_robomimic/*/
+!Diffusion_Policy/artifacts/sfc_robomimic/*/config.json
+!Diffusion_Policy/artifacts/sfc_robomimic/*/logs.json.txt
+!Diffusion_Policy/artifacts/sfc_robomimic/*/training_history.csv
 
 # ---------------------------------------------------------------------------
 # Locally generated shareable bundles

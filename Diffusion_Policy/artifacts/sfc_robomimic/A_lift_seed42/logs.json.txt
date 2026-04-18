@@ -1,0 +1,2 @@
+{"epoch": 0, "train_loss": 0.2824840508801963, "train_loss_diff": 0.2824840508801963, "train_loss_freq": 0.0, "val_loss": 0.12238492527600456, "lr": 9.997532801828658e-05, "group": "A", "seed": 42}
+{"epoch": 1, "train_loss": 0.09697627850597905, "train_loss_diff": 0.09697627850597905, "train_loss_freq": 0.0, "val_loss": 0.08732619697417303, "lr": 9.990133642141359e-05, "group": "A", "seed": 42}

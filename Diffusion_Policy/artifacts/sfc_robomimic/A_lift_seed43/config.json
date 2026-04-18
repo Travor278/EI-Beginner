@@ -1,0 +1,15 @@
+{
+  "task": "lift",
+  "group": "A",
+  "seed": 43,
+  "epochs": 100,
+  "batch_size": 16,
+  "lr": 0.0001,
+  "lambda_freq": 0.01,
+  "lambda_warmup_epochs": 20,
+  "soft_mask": false,
+  "best_metric": 1.0,
+  "best_val_loss": 0.03669116584584117,
+  "zarr_path": "/home/Travor/workspaces/diffusion_policy/data/robomimic/lift/ph/image.hdf5",
+  "dp_repo_path": "/home/Travor/workspaces/diffusion_policy"
+}

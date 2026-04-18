@@ -4,6 +4,7 @@ from future import standard_library
 standard_library.install_aliases()
 from builtins import range
 import urllib.request, urllib.error, urllib.parse, os, tempfile
+import io
 
 import numpy as np
 from imageio import imread
@@ -64,11 +65,7 @@ def image_from_url(url):
     """
     try:
         f = urllib.request.urlopen(url)
-        _, fname = tempfile.mkstemp()
-        with open(fname, "wb") as ff:
-            ff.write(f.read())
-        img = imread(fname)
-        os.remove(fname)
+        img = imread(io.BytesIO(f.read()))
         return img
     except urllib.error.URLError as e:
         print("URL Error: ", e.reason, url)
