@@ -17,11 +17,40 @@ assignment1/*.tex
 # Local datasets
 assignment1/cs231n/datasets/cifar-10-batches-py/
 assignment1/cs231n/datasets/imagenet_val_25.npz
+assignment1/cs231n/saved/
+
+# Assignment 2 local artifacts
+assignment2/html_exports/
+assignment2/*.pdf
+assignment2/*.zip
+assignment2/*.aux
+assignment2/*.log
+assignment2/*.out
+assignment2/*.tex
+assignment2/cs231n/datasets/cifar-10-batches-py/
+assignment2/cs231n/datasets/imagenet_val_25.npz
+assignment2/cs231n/datasets/coco_captioning/
 
 # Local build artifacts
 assignment2/cs231n/build/
 assignment2/cs231n/*.so
 assignment2/cs231n/*.pyd
+
+# Assignment 3 local artifacts and datasets
+assignment3/*.pdf
+assignment3/*.zip
+assignment3/*.aux
+assignment3/*.log
+assignment3/*.out
+assignment3/*.tex
+assignment3/html_exports/
+assignment3/data/
+assignment3/results/
+assignment3/pretrained_model/
+assignment3/cs231n/datasets/cifar-10-batches-py/
+assignment3/cs231n/datasets/imagenet_val_25.npz
+assignment3/cs231n/datasets/coco_captioning/
+assignment3/cs231n/exp/pretrained/
 
 # OS/editor noise
 .DS_Store
