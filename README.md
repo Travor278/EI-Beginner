@@ -67,8 +67,9 @@
 
 ![任务三](./assets/task3.png)
 
-1. 复现模仿学习经典 baseline：Diffusion Policy
+1. 已完成：复现模仿学习经典 baseline：Diffusion Policy
    - <https://diffusion-policy.cs.columbia.edu>
+   - 本仓库记录：[`Diffusion_Policy/`](./Diffusion_Policy/)
 2. 学习 HuggingFace 机器人学习框架 LeRobot
    - <https://github.com/huggingface/lerobot>
 

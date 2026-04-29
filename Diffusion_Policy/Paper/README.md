@@ -1,161 +1,51 @@
-# Diffusion Policy 复现计划
+# Diffusion Policy Research Notes
 
-## 目标
+> Current status: closed archive. These notes document a completed baseline
+> reproduction and several follow-up ideas that ended as negative or inconclusive
+> results under the available compute and benchmark settings.
 
-先在 **WSL Ubuntu** 里搭一个干净、可控、可逐步扩展的复现环境，再按阶段推进：
+This folder is organized in the style of a research repository log: final verdict
+first, then reproduction evidence, then method attempts, then raw historical notes.
 
-1. 跑通官方代码仓和最小 smoke test；
-2. 先做 `Push-T` 这类入门 benchmark；
-3. 再逐步升级到更有挑战性的 image-based 任务。
+## Read First
 
-当前原则：
+| File | Role | Current status |
+| --- | --- | --- |
+| [`00_项目收束总结.md`](./00_项目收束总结.md) | Final project verdict | Current |
+| [`00_复现计划与环境记录.md`](./00_复现计划与环境记录.md) | Original environment and reproduction plan | Historical but useful |
+| [`排错日记.md`](./排错日记.md) | Step-by-step debugging diary | Evidence for reproduction |
+| [`研究方向v3.6_SFC-DP与后续三步计划.md`](./研究方向v3.6_SFC-DP与后续三步计划.md) | Most complete late-stage method log | Final method attempt |
 
-- 不一次性把所有依赖和任务全装完；
-- 先保证环境结构清楚、GPU 可用、问题能快速定位；
-- 每一步都先做小验证，再进入下一步。
+## Research Timeline
 
-## 当前环境状态
+| Stage | File | Decision |
+| --- | --- | --- |
+| Initial planning | [`研究方向规划.md`](./研究方向规划.md) | Broad scan of possible DP follow-ups |
+| v2 | [`研究方向规划v2.md`](./研究方向规划v2.md) | Turned toward curriculum / small-data DP |
+| v2 review | [`研究方向规划v2_审查与执行计划.md`](./研究方向规划v2_审查与执行计划.md) | Narrowed execution plan after novelty/risk review |
+| v3 | [`研究方向v3_世界模型交叉.md`](./研究方向v3_世界模型交叉.md) | Pivoted toward world-model supervision |
+| v3.1 | [`研究方向v3.1_预测难度重加权.md`](./研究方向v3.1_预测难度重加权.md) | Predictive-hardness reweighting, archived as negative |
+| v3.5 | [`研究方向v3.5_去噪时世界模型一致性.md`](./研究方向v3.5_去噪时世界模型一致性.md) | DLOS-DP, stopped at failed world-model gate |
+| v3.6 review | [`研究方向v3.6_三方向新颖性审查与失败分析.md`](./研究方向v3.6_三方向新颖性审查与失败分析.md) | Consolidated failed paths and new candidates |
+| v3.6 final | [`研究方向v3.6_SFC-DP与后续三步计划.md`](./研究方向v3.6_SFC-DP与后续三步计划.md) | SFC-DP, inconclusive after Push-T and Lift saturation |
 
-### 已完成
+## Evidence Map
 
-- WSL 发行版：`Ubuntu2204`
-- 系统依赖已安装：
-  - `libosmesa6-dev`
-  - `libgl1-mesa-glx`
-  - `libglfw3`
-  - `patchelf`
-  - `unzip`
-- Miniconda 已安装到：`/home/Travor/tools/miniconda3`
-- conda 环境目录：`/home/Travor/tools/conda-envs`
-- conda 包缓存目录：`/home/Travor/tools/conda-pkgs`
-- 已创建核心环境：`robodiff`
-- 已创建现代 GPU 环境：`robodiff-gpu`
+| Evidence type | Location |
+| --- | --- |
+| Baseline figure | [`../figures/pusht_baseline_seed42_ieee.png`](../figures/pusht_baseline_seed42_ieee.png) |
+| Main experiment artifacts | [`../artifacts/`](../artifacts/) |
+| Analysis-only artifacts | [`../artifacts_analysis_only/`](../artifacts_analysis_only/) |
+| Predictive-hardness prototype | [`../pred_hardness/`](../pred_hardness/) |
+| DLOS prototype | [`../dlos_dp/`](../dlos_dp/) |
+| SFC-DP prototype | [`../sfc_dp/`](../sfc_dp/) |
 
-### 当前目录布局
+## Current Interpretation
 
-```text
-/home/Travor
-├─ downloads/              # 下载的安装包、压缩包
-├─ tools/
-│  ├─ miniconda3/          # conda 本体
-│  ├─ conda-envs/          # 各个 conda 环境
-│  └─ conda-pkgs/          # conda 包缓存
-├─ workspaces/
-│  └─ _setup/              # 环境文件、临时安装说明
-└─ ros2_ws/                # 现有 ROS2 工作区
-```
+The correct final interpretation is conservative:
 
-## 关键兼容性结论
-
-官方 `Diffusion Policy` 环境文件固定使用：
-
-- `python=3.9`
-- `pytorch=1.12.1`
-- `torchvision=0.13.1`
-- `cudatoolkit=11.6`
-
-这套环境在旧卡上没问题，但在当前这台机器上有一个重要风险：
-
-- 当前 GPU：`NVIDIA GeForce RTX 5070 Laptop GPU`
-- 本地测试结果：`torch.cuda.is_available()` 为 `True`
-- 但 PyTorch 直接给出告警：**当前安装不支持该卡的 `sm_120` 架构**
-- 最小 CUDA 张量运算测试没有正常返回，说明“能看到卡”不等于“能稳定训练”
-
-结论：
-
-- `robodiff` 目前更适合作为 **官方旧环境参考壳子**
-- 真正用于训练的环境，下一步应切换到 **更新版 PyTorch / CUDA 组合**
-
-目前已验证可用的新环境：
-
-- 环境名：`robodiff-gpu`
-- Python：`3.10`
-- PyTorch：`2.10.0+cu128`
-- torchvision：`0.25.0+cu128`
-- torchaudio：`2.10.0+cu128`
-- 本地最小 CUDA 张量运算测试：通过
-
-## 我们的分阶段路线
-
-### Phase 0：环境落地
-
-- [x] 搭好 WSL Ubuntu 基础环境
-- [x] 安装系统层图形/MuJoCo 依赖
-- [x] 安装独立 Miniconda
-- [x] 整理 conda 环境与缓存目录
-- [x] 创建 `robodiff` 核心环境
-- [x] 发现并确认官方老版 PyTorch 与 5070 Laptop 存在架构兼容问题
-
-### Phase 1：创建可训练的现代 GPU 环境
-
-已完成：
-
-1. 保留当前 `robodiff` 作为参考环境；
-2. 新建 `robodiff-gpu` 作为 GPU 兼容版训练环境；
-3. 用最小 `torch.cuda` 算子测试确认真的能跑。
-
-下一步要做：
-
-1. 在 `robodiff-gpu` 里拉取官方代码；
-2. 先补最小可运行依赖；
-3. 跑 import / eval 级别的 smoke test。
-
-### Phase 2：拉取官方仓库
-
-目标：
-
-1. 把官方仓库放到 `~/workspaces/diffusion_policy`
-2. 不往 notes 仓库里混正式训练代码
-3. 代码、数据、日志分目录放置
-
-### Phase 3：按任务补依赖
-
-不一口气装完所有官方依赖，而是按要跑的任务补齐：
-
-1. 先补 `Push-T` 所需最小依赖；
-2. 跑通 import / env / eval；
-3. 再补 `robomimic`、`robosuite`、`pytorch3d` 这类更重的依赖。
-
-### Phase 4：最小复现
-
-推荐顺序：
-
-1. 先跑官方预训练 checkpoint 的评估；
-2. 再下载 `Push-T` 数据集；
-3. 再训单个 seed；
-4. 最后再考虑更难的 image-based 任务。
-
-## 当前常用命令
-
-```bash
-# 进入 WSL
-wsl
-
-# 激活 Miniconda（新终端里一般已自动可用）
-source ~/tools/miniconda3/etc/profile.d/conda.sh
-
-# 激活当前参考环境
-conda activate robodiff
-
-# 激活当前 GPU 环境
-conda activate robodiff-gpu
-
-# 查看 conda 环境
-conda env list
-
-# 查看 GPU
-nvidia-smi
-```
-
-## 现在不要做的事
-
-- 不要现在就下载所有数据集
-- 不要现在就强行跑完整官方训练
-- 不要把官方代码直接塞进当前 notes 仓库
-- 不要继续沿用 `PyTorch 1.12.1` 直接做 GPU 训练
-
-## 下一步
-
-下一步只做一件事：
-
-**在 `robodiff-gpu` 里拉取 Diffusion Policy 官方代码，并先做不训练的最小 smoke test。**
+- Count the work as a completed Diffusion Policy baseline reproduction.
+- Preserve follow-up ideas as useful research process and negative results.
+- Do not claim a new method improvement over Diffusion Policy.
+- Resume only after changing to a more discriminative benchmark, more reliable
+  evaluation protocol, or larger compute budget.

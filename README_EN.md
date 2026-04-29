@@ -72,8 +72,9 @@ Recommended completion order:
 
 ![Task 3](./assets/task3.png)
 
-1. Reproduce the classic imitation learning baseline Diffusion Policy
+1. Completed: reproduce the classic imitation learning baseline Diffusion Policy
    - <https://diffusion-policy.cs.columbia.edu>
+   - Local record: [`Diffusion_Policy/`](./Diffusion_Policy/)
 2. Learn the HuggingFace robotics framework LeRobot
    - <https://github.com/huggingface/lerobot>
 
