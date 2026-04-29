@@ -117,8 +117,8 @@ source /opt/ros/humble/setup.bash
 
 ```mermaid
 graph LR
-  A[发布节点] -->|publish| B[/topic_name]
-  B -->|subscribe| C[订阅节点]
+  publisher["发布节点"] -->|publish| topic["/topic_name"]
+  topic -->|subscribe| subscriber["订阅节点"]
 ```
 
 topic 的特点：
@@ -137,9 +137,9 @@ topic 的特点：
 
 ```mermaid
 graph LR
-  A[客户端] -->|request| B[/service_name]
-  B -->|response| A
-  C[服务端] -.提供服务.-> B
+  client["客户端"] -->|request| service["/service_name"]
+  service -->|response| client
+  server["服务端"] -->|提供服务| service
 ```
 
 service 的特点：
@@ -345,8 +345,8 @@ ros2 interface show msg_type
 
 ```mermaid
 graph LR
-  A[topic_publisher_01] -->|std_msgs/msg/String| B[/command]
-  B --> C[topic_subscribe_01]
+  publisher["topic_publisher_01"] -->|std_msgs/msg/String| command["/command"]
+  command --> subscriber["topic_subscribe_01"]
 ```
 
 ### 6.2 创建 C++ 包
@@ -1016,9 +1016,9 @@ ros2 interface show service_type
 
 ```mermaid
 graph LR
-  A[service_client_01] -->|request: a,b| B[/add_two_ints_srv]
-  B -->|response: sum| A
-  C[service_server_01] -.提供服务.-> B
+  client["service_client_01"] -->|request: a, b| service["/add_two_ints_srv"]
+  service -->|response: sum| client
+  server["service_server_01"] -->|提供服务| service
 ```
 
 ### 10.2 创建 C++ service 包
