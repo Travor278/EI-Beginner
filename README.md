@@ -11,6 +11,28 @@
   - `linux指令.txt`：Linux 常用指令备忘录，包含文件操作、进程管理、GPU 监控、训练日志等
 - 会用 Git 和 GitHub
   - <https://learngitbranching.js.org/>
+- 机器学习 / 深度学习基础
+  - [`ML/`](./ML/)：机器学习基础练习与课程笔记
+  - [`CS231n/`](./CS231n/)：计算机视觉与深度学习课程作业
+- 机器人系统基础
+  - [`ROS2/`](./ROS2/)：ROS2 节点、话题、服务、DDS 架构等入门笔记
+
+## 当前仓库地图
+
+| 目录 / 文件 | 内容定位 |
+| --- | --- |
+| [`ML/`](./ML/) | 机器学习基础、神经网络、课程练习 |
+| [`CS231n/`](./CS231n/) | 计算机视觉 / 深度学习作业与实验 |
+| [`Robotics_NTU/`](./Robotics_NTU/) | 传统机器人学：坐标变换、正逆运动学、可视化 |
+| [`EI_Mujoco/`](./EI_Mujoco/) | MuJoCo 入门与仿真起点 |
+| [`RL_Basics/`](./RL_Basics/) | 强化学习基础路线 |
+| [`Gymnasium_Basics/`](./Gymnasium_Basics/) | Gymnasium 经典控制任务 |
+| [`Gymnasium_Robotics/`](./Gymnasium_Robotics/) | Fetch 系列机器人强化学习任务 |
+| [`Robot_Grasping_RL/`](./Robot_Grasping_RL/) | 自定义机械臂抓取 RL 任务规划 |
+| [`Diffusion_Policy/`](./Diffusion_Policy/) | Diffusion Policy 复现、实验记录与研究想法 |
+| [`Robot/Lerobot/`](./Robot/Lerobot/) | Hugging Face LeRobot 框架总览 |
+| [`ROS2/`](./ROS2/) | ROS2 通信与系统架构基础 |
+| [`VLM/`](./VLM/) | VLM / VLA 论文阅读与代码解读 |
 
 ## 任务一：基于传统运动学的机械臂物体抓取
 
@@ -32,6 +54,8 @@
   - 台大《机器人学》课堂笔记整理及配套可视化
 - `EI_Mujoco/hello_mujoco.py`
   - MuJoCo 入门练习：创建简单场景、加载物理模型、运行仿真循环
+- `ROS2/`
+  - 后续接真实机器人或多节点系统时的通信基础
 
 ## 任务二：基于强化学习的机械臂物体抓取
 
@@ -72,6 +96,14 @@
    - 本仓库记录：[`Diffusion_Policy/`](./Diffusion_Policy/)
 2. 学习 HuggingFace 机器人学习框架 LeRobot
    - <https://github.com/huggingface/lerobot>
+   - 本仓库记录：[`Robot/Lerobot/`](./Robot/Lerobot/)
+
+### 对应当前仓库内容
+
+- `Diffusion_Policy/`
+  - Diffusion Policy 复现、PushT baseline、预测难度重加权、世界模型一致性等实验记录
+- `Robot/Lerobot/`
+  - LeRobot 框架总览：数据格式、processor、policy、训练评估入口、和 SmolVLA 的关系
 
 ## 任务四：基于 VLA 大模型的机械臂物体抓取
 
@@ -86,6 +118,19 @@
 - GR00T：<https://github.com/NVIDIA/Isaac-GR00T>
 - Open-X Embodiment：<https://robotics-transformer-x.github.io/>
 - Large Models：<https://stanford-cs336.github.io/spring2025/>
+
+### 对应当前仓库内容
+
+- `VLM/OpenVLA/`
+  - OpenVLA 论文阅读、双视觉编码器代码解读
+- `VLM/pi0/`
+  - pi0 论文阅读、flow action expert 代码解读
+- `VLM/SmolVLA/`
+  - SmolVLA 论文、LeRobot 生态下的复现评估与学习路线
+- `VLM/OFT/`
+  - VLA fine-tuning 相关论文与动作头代码解读
+- `VLM/`
+  - GR-1、GR-2、GR-3、RDT-1B、pi0.5 等 VLA / robot foundation model 论文资料
 
 ## 任务五：基于 LLM/VLM 大模型的任务规划
 

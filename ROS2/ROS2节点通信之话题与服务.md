@@ -184,7 +184,7 @@ ros2 run demo_nodes_py listener
 ros2 topic list
 ```
 
-正常会看到：
+输出：
 
 ```text
 /chatter
@@ -200,7 +200,7 @@ ros2 topic list
 ros2 topic list -t
 ```
 
-可能输出：
+输出：
 
 ```text
 /chatter [std_msgs/msg/String]
@@ -236,6 +236,8 @@ data: 'Hello World: 12'
 ```
 
 `ros2 topic echo` 本质上是临时创建了一个订阅者，订阅 `/chatter` 并把收到的数据打印出来。
+
+![运行截图](./figures/lesson2/话题&打印.png)
 
 ### 5.5 查看发布者和订阅者数量
 
@@ -294,6 +296,8 @@ message.data = "hello";
 
 这一节真正要建立的意识是：topic 名称只解决“发到哪里”，接口类型才决定“发的东西长什么样”。
 
+![运行截图](./figures/lesson2/查看发布者和订阅者数量&追到接口定义.png)
+
 ### 5.7 手动扮演发布者
 
 先关掉 `/talker`，保留 `/listener`，然后用命令行直接往 `/chatter` 发消息：
@@ -317,6 +321,8 @@ ros2 topic pub --rate 2 /chatter std_msgs/msg/String "{data: '2 Hz message'}"
 ```
 
 这条命令非常适合调试订阅者：当我们还没有写好发布节点时，可以先用 CLI 假装自己是发布者。
+
+![运行截图](./figures/lesson2/手动扮演发布者.png)
 
 ### 5.8 topic 常用命令速查
 
@@ -600,6 +606,8 @@ ros2 topic info /command
 ros2 topic echo /command
 ```
 
+![运行截图](./figures/lesson2/运行测试.png)
+
 ### 6.11 用命令行测试订阅者
 
 只运行订阅者，然后手动发布：
@@ -611,6 +619,8 @@ ros2 topic pub --once /command std_msgs/msg/String "{data: 'forward'}"
 ```
 
 这样可以单独验证订阅者逻辑，不需要每次都启动发布者。
+
+![运行截图](./figures/lesson2/用命令行测试订阅者.png)
 
 ## 7. Python 实现 topic 发布订阅
 
